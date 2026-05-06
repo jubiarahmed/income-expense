@@ -290,6 +290,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         payload.id,
         account.id,
       ]);
+      await activity(account.id, 'contact', payload.id, `Updated ${input.name}`, 'Contact details edited.', undefined, payload.id);
       return ok(response);
     }
 
@@ -300,7 +301,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
         pool.query('select 1 from item_records where account_id=$1 and person_id=$2 limit 1', [account.id, id]),
       ]);
       if (refs.some((result) => result.rowCount)) return fail(response, 400, 'This person has related records and cannot be deleted.');
+      const existing = await pool.query('select name from contacts where id=$1 and account_id=$2', [id, account.id]);
+      const name = existing.rows[0]?.name ?? 'contact';
       await pool.query('delete from contacts where id=$1 and account_id=$2', [id, account.id]);
+      await activity(account.id, 'contact', id, `Deleted ${name}`, 'Contact removed from Expense Tracker.', undefined, id);
       return ok(response);
     }
 
@@ -320,12 +324,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
            where id=$8 and account_id=$9`,
           [input.amount, input.category, input.note, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null, id, account.id],
         );
+        await activity(account.id, 'expense', id, `Updated ${input.category} expense`, input.note || input.paymentMethod, input.amount);
       }
       return ok(response);
     }
 
     if (action === 'deleteExpense') {
+      const existing = await pool.query('select amount, category, note from expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'expense', payload.id, `Deleted ${row.category} expense`, row.note || 'Expense removed.', numberValue(row.amount));
+      }
       return ok(response);
     }
 
@@ -339,6 +349,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
          values ($1,$2,$3,$4,$5,current_date,$6,$7,$8,now(),now())`,
         [id, account.id, row.amount, row.category, row.note, row.payment_method, JSON.stringify(row.tags || []), row.receipt_image || null],
       );
+      await activity(account.id, 'expense', id, `Duplicated ${row.category} expense`, row.note || 'Repeat expense logged for today.', numberValue(row.amount));
       return ok(response);
     }
 
@@ -358,12 +369,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
            where id=$7 and account_id=$8`,
           [input.amount, input.category, input.source, input.note, input.date, input.paymentMethod, id, account.id],
         );
+        await activity(account.id, 'income', id, `Updated ${input.category} income`, input.source || input.note || input.paymentMethod, input.amount);
       }
       return ok(response);
     }
 
     if (action === 'deleteIncome') {
+      const existing = await pool.query('select amount, category, source from incomes where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from incomes where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'income', payload.id, `Deleted ${row.category} income`, row.source || 'Income removed.', numberValue(row.amount));
+      }
       return ok(response);
     }
 
@@ -383,12 +400,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
            where id=$7 and account_id=$8`,
           [input.amount, input.fromMethod, input.toMethod, input.fee, input.date, input.note, id, account.id],
         );
+        await activity(account.id, 'transfer', id, `Updated ${input.fromMethod} → ${input.toMethod}`, input.note || 'Transfer details edited.', input.amount);
       }
       return ok(response);
     }
 
     if (action === 'deleteTransfer') {
+      const existing = await pool.query('select amount, from_method, to_method from transfers where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from transfers where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'transfer', payload.id, `Deleted ${row.from_method} → ${row.to_method}`, 'Transfer removed.', numberValue(row.amount));
+      }
       return ok(response);
     }
 
@@ -410,12 +433,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
           id,
           account.id,
         ]);
+        await activity(account.id, 'sharedGroup', id, `Updated ${input.name}`, 'Shared group edited.');
       }
       return ok(response);
     }
 
     if (action === 'deleteSharedGroup') {
+      const existing = await pool.query('select name from shared_groups where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from shared_groups where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'sharedGroup', payload.id, `Deleted ${row.name}`, 'Shared group removed.');
+      }
       return ok(response);
     }
 
@@ -461,17 +490,37 @@ export default async function handler(request: VercelRequest, response: VercelRe
             account.id,
           ],
         );
+        await activity(account.id, 'sharedExpense', id, `Updated shared "${input.note}"`, 'Split details edited.', input.amount);
       }
       return ok(response);
     }
 
     if (action === 'deleteSharedExpense') {
+      const existing = await pool.query('select amount, note from shared_expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from shared_expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'sharedExpense', payload.id, `Deleted shared "${row.note}"`, 'Shared expense removed.', numberValue(row.amount));
+      }
       return ok(response);
     }
 
     if (action === 'toggleSharedExpenseSettled') {
-      await pool.query('update shared_expenses set settled = not settled, updated_at=now() where id=$1 and account_id=$2', [payload.id, account.id]);
+      const updated = await pool.query(
+        'update shared_expenses set settled = not settled, updated_at=now() where id=$1 and account_id=$2 returning settled, amount, note',
+        [payload.id, account.id],
+      );
+      const row = updated.rows[0];
+      if (row) {
+        await activity(
+          account.id,
+          'sharedExpense',
+          payload.id,
+          row.settled ? `Settled "${row.note}"` : `Reopened "${row.note}"`,
+          row.settled ? 'Shared expense marked settled.' : 'Shared expense reopened.',
+          numberValue(row.amount),
+        );
+      }
       return ok(response);
     }
 
@@ -491,12 +540,34 @@ export default async function handler(request: VercelRequest, response: VercelRe
            where id=$8 and account_id=$9`,
           [input.personId, input.direction, input.amount, input.date, input.dueDate || null, input.notes, input.status, id, account.id],
         );
+        await activity(
+          account.id,
+          'loan',
+          id,
+          input.direction === 'lent' ? 'Updated loan (lent)' : 'Updated loan (borrowed)',
+          input.notes || 'Loan details edited.',
+          input.amount,
+          input.personId,
+        );
       }
       return ok(response);
     }
 
     if (action === 'deleteLoan') {
+      const existing = await pool.query('select amount, direction, person_id, notes from loans where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from loans where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(
+          account.id,
+          'loan',
+          payload.id,
+          row.direction === 'lent' ? 'Deleted loan (lent)' : 'Deleted loan (borrowed)',
+          row.notes || 'Loan removed.',
+          numberValue(row.amount),
+          row.person_id,
+        );
+      }
       return ok(response);
     }
 
@@ -513,7 +584,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     if (action === 'deleteLoanPayment') {
+      const existing = await pool.query('select amount, note from loan_payments where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from loan_payments where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'loanPayment', payload.id, 'Loan repayment deleted', row.note || 'Repayment removed.', numberValue(row.amount));
+      }
       return ok(response);
     }
 
@@ -533,20 +609,54 @@ export default async function handler(request: VercelRequest, response: VercelRe
            returned_date=$8, updated_at=now() where id=$9 and account_id=$10`,
           [input.itemName, input.personId, input.direction, input.date, input.dueDate || null, input.note, input.status, input.returnedDate || null, id, account.id],
         );
+        await activity(
+          account.id,
+          'item',
+          id,
+          input.direction === 'lent' ? `Updated lent ${input.itemName}` : `Updated borrowed ${input.itemName}`,
+          input.note || 'Item record edited.',
+          undefined,
+          input.personId,
+        );
       }
       return ok(response);
     }
 
     if (action === 'deleteItem') {
+      const existing = await pool.query('select item_name, direction, person_id from item_records where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from item_records where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(
+          account.id,
+          'item',
+          payload.id,
+          row.direction === 'lent' ? `Deleted lent ${row.item_name}` : `Deleted borrowed ${row.item_name}`,
+          'Item record removed.',
+          undefined,
+          row.person_id,
+        );
+      }
       return ok(response);
     }
 
     if (action === 'markItemReturned') {
-      await pool.query(`update item_records set status='returned', returned_date=current_date, updated_at=now() where id=$1 and account_id=$2`, [
-        payload.id,
-        account.id,
-      ]);
+      const updated = await pool.query(
+        `update item_records set status='returned', returned_date=current_date, updated_at=now() where id=$1 and account_id=$2 returning item_name, direction, person_id`,
+        [payload.id, account.id],
+      );
+      const row = updated.rows[0];
+      if (row) {
+        await activity(
+          account.id,
+          'item',
+          payload.id,
+          `Returned ${row.item_name}`,
+          row.direction === 'lent' ? 'Item is back with you.' : 'Item returned to owner.',
+          undefined,
+          row.person_id,
+        );
+      }
       return ok(response);
     }
 
@@ -566,12 +676,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
            notes=$7, status=$8, updated_at=now() where id=$9 and account_id=$10`,
           [input.name, input.amount, input.cycle, input.category, input.nextDueDate, input.autoRenew, input.notes, input.status, id, account.id],
         );
+        await activity(account.id, 'subscription', id, `Updated ${input.name}`, `${input.cycle} · ${input.status}`, input.amount);
       }
       return ok(response);
     }
 
     if (action === 'deleteSubscription') {
+      const existing = await pool.query('select name, amount, cycle from subscriptions where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
       await pool.query('delete from subscriptions where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'subscription', payload.id, `Deleted ${row.name}`, `${row.cycle} subscription removed.`, numberValue(row.amount));
+      }
       return ok(response);
     }
 
@@ -583,6 +699,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
          where account_id=$5`,
         [input.currency, input.reminderDaysBefore, input.notificationsEnabled, input.theme, account.id],
       );
+      await activity(account.id, 'settings', account.id, 'Preferences updated', `${input.currency} · ${input.theme} theme · reminders ${input.reminderDaysBefore}d`);
       return ok(response);
     }
 

@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, SUBSCRIPTION_CYCLES } from './constants.js';
+import { PAYMENT_METHODS, SUBSCRIPTION_CYCLES } from './constants.js';
 
 const idSchema = z.string().min(1);
 const moneySchema = z.coerce.number().positive('Enter an amount greater than 0');
 const dateSchema = z.string().min(1, 'Choose a date');
 const optionalDateSchema = z.string().optional();
+const categorySchema = z.string().trim().min(1, 'Category is required').max(40, 'Category is too long');
 
 export const contactSchema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
@@ -14,7 +15,7 @@ export const contactSchema = z.object({
 
 export const expenseSchema = z.object({
   amount: moneySchema,
-  category: z.enum(EXPENSE_CATEGORIES),
+  category: categorySchema,
   note: z.string().trim().optional().default(''),
   date: dateSchema,
   paymentMethod: z.enum(PAYMENT_METHODS),
@@ -24,7 +25,7 @@ export const expenseSchema = z.object({
 
 export const incomeSchema = z.object({
   amount: moneySchema,
-  category: z.enum(INCOME_CATEGORIES),
+  category: categorySchema,
   source: z.string().trim().optional().default(''),
   note: z.string().trim().optional().default(''),
   date: dateSchema,

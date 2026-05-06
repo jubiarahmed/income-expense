@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeftRight, HandCoins, PackageOpen, Plus, Repeat, UserPlus, Users } from 'lucide-react';
+import { ArrowLeftRight, Check, HandCoins, PackageOpen, Plus, Repeat, Sparkles, UserPlus, Users, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { BottomSheet } from '../ui/BottomSheet';
 import { ExpenseForm } from '../../features/transactions/ExpenseForm';
@@ -11,8 +11,9 @@ import { ItemForm } from '../../features/obligations/ItemForm';
 import { SubscriptionForm } from '../../features/obligations/SubscriptionForm';
 import { ContactForm } from '../../features/people/ContactForm';
 import { SharedGroupForm } from '../../features/transactions/SharedGroupForm';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../../domain/constants';
 import { getExpenseCategoryStyle, getIncomeCategoryStyle } from '../../domain/categoryIcons';
+import { getAllExpenseCategories, getAllIncomeCategories } from '../../domain/customCategories';
+import { useFinanceStore } from '../../state/useFinanceStore';
 import { useUiStore, type AddFlowType, type ChooserTab } from '../../state/useUiStore';
 import type { ExpenseCategory, IncomeCategory } from '../../domain/models';
 
@@ -35,17 +36,23 @@ export function GlobalAddSheet() {
   const closeAddFlow = useUiStore((state) => state.closeAddFlow);
   const chooserTab = useUiStore((state) => state.chooserTab);
   const setChooserTab = useUiStore((state) => state.setChooserTab);
+  const expenses = useFinanceStore((state) => state.expenses);
+  const incomes = useFinanceStore((state) => state.incomes);
   const open = Boolean(activeAddFlow);
   const title = activeAddFlow ? flowTitles[activeAddFlow] : 'Add';
 
   // Pre-selected category passed when user taps a tile
   const [presetExpense, setPresetExpense] = useState<ExpenseCategory | undefined>();
   const [presetIncome, setPresetIncome] = useState<IncomeCategory | undefined>();
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customDraft, setCustomDraft] = useState('');
 
   function done() {
     closeAddFlow();
     setPresetExpense(undefined);
     setPresetIncome(undefined);
+    setShowCustomInput(false);
+    setCustomDraft('');
   }
 
   function pickExpense(category: ExpenseCategory) {
@@ -58,27 +65,57 @@ export function GlobalAddSheet() {
     openAddFlow('income');
   }
 
+  function submitCustom() {
+    const name = customDraft.trim();
+    if (!name) return;
+    setShowCustomInput(false);
+    setCustomDraft('');
+    if (chooserTab === 'expense') pickExpense(name);
+    else if (chooserTab === 'income') pickIncome(name);
+  }
+
+  const expenseCategoryNames = getAllExpenseCategories(expenses);
+  const incomeCategoryNames = getAllIncomeCategories(incomes);
+
   return (
     <BottomSheet open={open} title={title} onClose={done}>
       {activeAddFlow === 'chooser' ? (
         <div className="space-y-5 animate-rise">
           <ChooserTabs value={chooserTab} onChange={setChooserTab} />
+
+          {showCustomInput && (chooserTab === 'expense' || chooserTab === 'income') ? (
+            <CustomCategoryRow
+              tone={chooserTab}
+              value={customDraft}
+              onChange={setCustomDraft}
+              onSubmit={submitCustom}
+              onCancel={() => {
+                setShowCustomInput(false);
+                setCustomDraft('');
+              }}
+            />
+          ) : null}
+
           {chooserTab === 'expense' ? (
             <CategoryGrid
-              items={EXPENSE_CATEGORIES.map((cat) => {
+              items={expenseCategoryNames.map((cat) => {
                 const style = getExpenseCategoryStyle(cat);
                 return { key: cat, label: cat, Icon: style.icon, bg: style.bg, fg: style.fg };
               })}
               onPick={(key) => pickExpense(key as ExpenseCategory)}
+              onAddCustom={() => setShowCustomInput(true)}
+              addLabel="Custom"
             />
           ) : null}
           {chooserTab === 'income' ? (
             <CategoryGrid
-              items={INCOME_CATEGORIES.map((cat) => {
+              items={incomeCategoryNames.map((cat) => {
                 const style = getIncomeCategoryStyle(cat);
                 return { key: cat, label: cat, Icon: style.icon, bg: style.bg, fg: style.fg };
               })}
               onPick={(key) => pickIncome(key as IncomeCategory)}
+              onAddCustom={() => setShowCustomInput(true)}
+              addLabel="Custom"
             />
           ) : null}
           {chooserTab === 'transfer' ? (
@@ -143,9 +180,13 @@ function ChooserTabs({ value, onChange }: { value: ChooserTab; onChange: (v: Cho
 function CategoryGrid({
   items,
   onPick,
+  onAddCustom,
+  addLabel = 'Custom',
 }: {
   items: { key: string; label: string; Icon: React.ComponentType<{ size?: number; strokeWidth?: number }>; bg: string; fg: string }[];
   onPick: (key: string) => void;
+  onAddCustom?: () => void;
+  addLabel?: string;
 }) {
   return (
     <div className="grid grid-cols-4 gap-3">
@@ -165,6 +206,91 @@ function CategoryGrid({
           </button>
         );
       })}
+      {onAddCustom ? (
+        <button
+          type="button"
+          onClick={onAddCustom}
+          className="flex flex-col items-center gap-1.5 rounded-2xl p-2 text-center active:bg-zinc-100 dark:active:bg-zinc-800"
+        >
+          <span className="grid h-14 w-14 place-items-center rounded-2xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+            <Plus size={22} strokeWidth={2.4} />
+          </span>
+          <span className="line-clamp-1 text-[0.72rem] font-semibold text-indigo-600 dark:text-indigo-300">{addLabel}</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function CustomCategoryRow({
+  tone,
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+}: {
+  tone: 'expense' | 'income';
+  value: string;
+  onChange: (next: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  const accent =
+    tone === 'expense'
+      ? 'focus:border-rose-500 focus:ring-rose-500/15 text-rose-700 dark:text-rose-300'
+      : 'focus:border-emerald-500 focus:ring-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+  const buttonTone =
+    tone === 'expense'
+      ? 'bg-rose-600 active:bg-rose-700'
+      : 'bg-emerald-600 active:bg-emerald-700';
+  return (
+    <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-600 dark:text-indigo-300">
+        <Sparkles size={14} /> Add custom category
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onSubmit();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+          maxLength={40}
+          placeholder={tone === 'expense' ? 'e.g. Insurance, Childcare' : 'e.g. Tuition, Royalty'}
+          className={clsx(
+            'min-h-11 flex-1 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold outline-none transition placeholder:font-normal placeholder:text-zinc-400 focus:ring-4 dark:border-zinc-700 dark:bg-zinc-900',
+            accent,
+          )}
+        />
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!value.trim()}
+          className={clsx(
+            'grid h-11 w-11 place-items-center rounded-xl text-white shadow-sm transition disabled:opacity-50',
+            buttonTone,
+          )}
+          aria-label="Use this category"
+        >
+          <Check size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="grid h-11 w-11 place-items-center rounded-xl bg-white text-zinc-600 ring-1 ring-zinc-200 active:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-700"
+          aria-label="Cancel"
+        >
+          <X size={18} />
+        </button>
+      </div>
     </div>
   );
 }

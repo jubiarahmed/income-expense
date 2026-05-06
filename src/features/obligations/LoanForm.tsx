@@ -67,10 +67,25 @@ export function LoanForm({ loan, onDone }: { loan?: Loan; onDone?: () => void })
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date">
-          <TextInput type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+          <TextInput
+            type="date"
+            value={date}
+            max={dueDate || undefined}
+            onChange={(event) => setDate(event.target.value)}
+            required
+          />
         </Field>
         <Field label="Due date">
-          <TextInput type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          <TextInput
+            type="date"
+            value={dueDate}
+            min={date || undefined}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (date && next && next < date) return;
+              setDueDate(next);
+            }}
+          />
         </Field>
       </div>
       <Field label="Notes">

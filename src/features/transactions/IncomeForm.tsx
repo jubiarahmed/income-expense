@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { ChipButton, Field, SelectInput, TextArea, TextInput } from '../../components/ui/Form';
-import { INCOME_CATEGORIES, PAYMENT_METHODS } from '../../domain/constants';
+import { PAYMENT_METHODS } from '../../domain/constants';
+import { getAllIncomeCategories } from '../../domain/customCategories';
 import type { Income, IncomeCategory, PaymentMethod } from '../../domain/models';
 import { todayISO } from '../../lib/date';
 import { useFinanceStore } from '../../state/useFinanceStore';
@@ -17,6 +19,7 @@ export function IncomeForm({
 }) {
   const addIncome = useFinanceStore((state) => state.addIncome);
   const updateIncome = useFinanceStore((state) => state.updateIncome);
+  const incomes = useFinanceStore((state) => state.incomes);
   const [amount, setAmount] = useState(income?.amount.toString() ?? '');
   const [category, setCategory] = useState<IncomeCategory>(income?.category ?? initialCategory ?? 'Salary');
   const [source, setSource] = useState(income?.source ?? '');
@@ -25,6 +28,22 @@ export function IncomeForm({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(income?.paymentMethod ?? 'Bank');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customDraft, setCustomDraft] = useState('');
+
+  const allCategories = useMemo(() => {
+    const list = getAllIncomeCategories(incomes);
+    if (category && !list.includes(category)) list.push(category);
+    return list;
+  }, [incomes, category]);
+
+  function commitCustomCategory() {
+    const next = customDraft.trim();
+    if (!next) return;
+    setCategory(next);
+    setAddingCustom(false);
+    setCustomDraft('');
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -61,12 +80,54 @@ export function IncomeForm({
       <div className="space-y-2">
         <p className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Category</p>
         <div className="flex flex-wrap gap-2">
-          {INCOME_CATEGORIES.map((item) => (
+          {allCategories.map((item) => (
             <ChipButton key={item} active={category === item} onClick={() => setCategory(item)} tone="income">
               {item}
             </ChipButton>
           ))}
+          <button
+            type="button"
+            onClick={() => setAddingCustom(true)}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-dashed border-indigo-300 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 active:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300"
+          >
+            <Plus size={14} strokeWidth={2.6} /> Add
+          </button>
         </div>
+        {addingCustom ? (
+          <div className="flex items-center gap-2">
+            <TextInput
+              autoFocus
+              value={customDraft}
+              onChange={(event) => setCustomDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  commitCustomCategory();
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setAddingCustom(false);
+                  setCustomDraft('');
+                }
+              }}
+              maxLength={40}
+              placeholder="e.g. Tuition, Royalty"
+            />
+            <Button variant="income" className="min-h-12 px-3" onClick={commitCustomCategory}>
+              Use
+            </Button>
+            <Button
+              variant="ghost"
+              className="min-h-12 px-3"
+              onClick={() => {
+                setAddingCustom(false);
+                setCustomDraft('');
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <Field label="Source">

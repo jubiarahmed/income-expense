@@ -154,10 +154,24 @@ function DailyExpensesPanel() {
       <Card className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label="From">
-            <TextInput type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            <TextInput
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
           </Field>
           <Field label="To">
-            <TextInput type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            <TextInput
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (startDate && next && next < startDate) return;
+                setEndDate(next);
+              }}
+            />
           </Field>
         </div>
         <Field label="Category">
@@ -340,10 +354,24 @@ function IncomePanel() {
       <Card className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label="From">
-            <TextInput type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            <TextInput
+              type="date"
+              value={startDate}
+              max={endDate || undefined}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
           </Field>
           <Field label="To">
-            <TextInput type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            <TextInput
+              type="date"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(event) => {
+                const next = event.target.value;
+                if (startDate && next && next < startDate) return;
+                setEndDate(next);
+              }}
+            />
           </Field>
         </div>
         <Field label="Category">

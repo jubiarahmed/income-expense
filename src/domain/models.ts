@@ -7,47 +7,10 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export type AccountRole = 'user' | 'superadmin';
 export type AccountStatus = 'active' | 'held';
 
-export type ExpenseCategory =
-  | 'Shopping'
-  | 'Food'
-  | 'Phone'
-  | 'Entertainment'
-  | 'Education'
-  | 'Beauty'
-  | 'Sports'
-  | 'Social'
-  | 'Transportation'
-  | 'Clothing'
-  | 'Car'
-  | 'Alcohol'
-  | 'Cigarettes'
-  | 'Electronics'
-  | 'Travel'
-  | 'Health'
-  | 'Pets'
-  | 'Repairs'
-  | 'Housing'
-  | 'Home'
-  | 'Gifts'
-  | 'Donations'
-  | 'Lottery'
-  | 'Snacks'
-  | 'Kids'
-  | 'Vegetables'
-  | 'Fruits'
-  | 'Bills'
-  | 'Medicine'
-  | 'Recharge'
-  | 'Other';
-
-export type IncomeCategory =
-  | 'Salary'
-  | 'Investments'
-  | 'Part-Time'
-  | 'Bonus'
-  | 'Gift'
-  | 'Refund'
-  | 'Others';
+// Categories are free-form strings — the predefined sets in `constants.ts` are
+// suggestions/icons-with-colors; users can also enter custom names.
+export type ExpenseCategory = string;
+export type IncomeCategory = string;
 
 export type PaymentMethod = 'Cash' | 'bKash' | 'Nagad' | 'Card' | 'Bank' | 'Other';
 export type SplitType = 'equal' | 'custom';
