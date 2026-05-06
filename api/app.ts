@@ -1,0 +1,518 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import {
+  contactSchema,
+  expenseSchema,
+  itemSchema,
+  loanPaymentSchema,
+  loanSchema,
+  preferencesSchema,
+  sharedExpenseSchema,
+  sharedGroupSchema,
+  subscriptionSchema,
+} from '../src/domain/validation.js';
+import { makeId, requireAccount } from './_lib/auth.js';
+import { pool } from './_lib/db.js';
+import { fail, handleError, ok, readAction, setNoStore } from './_lib/http.js';
+
+function isoDate(value: unknown) {
+  if (!value) return undefined;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function isoDateTime(value: unknown) {
+  return value instanceof Date ? value.toISOString() : new Date(String(value)).toISOString();
+}
+
+function numberValue(value: unknown) {
+  return Number(value ?? 0);
+}
+
+async function ensurePreferences(accountId: string) {
+  await pool.query(
+    `insert into preferences (id, account_id, currency, reminder_days_before, notifications_enabled, theme, updated_at)
+     values ($1, $2, 'BDT', 2, false, 'light', now())
+     on conflict (account_id) do nothing`,
+    [`preferences_${accountId}`, accountId],
+  );
+}
+
+async function readSnapshot(accountId: string) {
+  await ensurePreferences(accountId);
+  const [
+    preferences,
+    contacts,
+    expenses,
+    sharedGroups,
+    sharedExpenses,
+    loans,
+    loanPayments,
+    items,
+    subscriptions,
+    reminders,
+    activities,
+  ] = await Promise.all([
+    pool.query('select * from preferences where account_id = $1 limit 1', [accountId]),
+    pool.query('select * from contacts where account_id = $1 order by name asc', [accountId]),
+    pool.query('select * from expenses where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from shared_groups where account_id = $1 order by updated_at desc', [accountId]),
+    pool.query('select * from shared_expenses where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from loans where account_id = $1 order by updated_at desc', [accountId]),
+    pool.query('select * from loan_payments where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from item_records where account_id = $1 order by updated_at desc', [accountId]),
+    pool.query('select * from subscriptions where account_id = $1 order by next_due_date asc', [accountId]),
+    pool.query('select * from reminders where account_id = $1 order by due_at asc', [accountId]),
+    pool.query('select * from activity_logs where account_id = $1 order by created_at desc limit 120', [accountId]),
+  ]);
+
+  const pref = preferences.rows[0];
+  return {
+    preferences: {
+      id: pref.id,
+      accountId: pref.account_id,
+      currency: pref.currency,
+      reminderDaysBefore: pref.reminder_days_before,
+      notificationsEnabled: pref.notifications_enabled,
+      theme: pref.theme,
+      seededAt: pref.seeded_at ? isoDateTime(pref.seeded_at) : undefined,
+      updatedAt: isoDateTime(pref.updated_at),
+    },
+    contacts: contacts.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      name: row.name,
+      phone: row.phone || undefined,
+      notes: row.notes || undefined,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    expenses: expenses.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      amount: numberValue(row.amount),
+      category: row.category,
+      note: row.note,
+      date: isoDate(row.date),
+      paymentMethod: row.payment_method,
+      tags: row.tags || [],
+      receiptImage: row.receipt_image || undefined,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    sharedGroups: sharedGroups.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      name: row.name,
+      description: row.description,
+      participantIds: row.participant_ids || [],
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    sharedExpenses: sharedExpenses.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      groupId: row.group_id,
+      amount: numberValue(row.amount),
+      note: row.note,
+      date: isoDate(row.date),
+      payerId: row.payer_id,
+      participantIds: row.participant_ids || [],
+      splitType: row.split_type,
+      shares: row.shares || [],
+      settled: row.settled,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    loans: loans.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      personId: row.person_id,
+      direction: row.direction,
+      amount: numberValue(row.amount),
+      date: isoDate(row.date),
+      dueDate: isoDate(row.due_date),
+      notes: row.notes,
+      status: row.status,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    loanPayments: loanPayments.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      loanId: row.loan_id,
+      amount: numberValue(row.amount),
+      date: isoDate(row.date),
+      note: row.note,
+      createdAt: isoDateTime(row.created_at),
+    })),
+    items: items.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      itemName: row.item_name,
+      personId: row.person_id,
+      direction: row.direction,
+      date: isoDate(row.date),
+      dueDate: isoDate(row.due_date),
+      note: row.note,
+      status: row.status,
+      returnedDate: isoDate(row.returned_date),
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    subscriptions: subscriptions.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      name: row.name,
+      amount: numberValue(row.amount),
+      cycle: row.cycle,
+      category: row.category,
+      nextDueDate: isoDate(row.next_due_date),
+      autoRenew: row.auto_renew,
+      notes: row.notes,
+      status: row.status,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    reminders: reminders.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+      title: row.title,
+      dueAt: isoDate(row.due_at),
+      status: row.status,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    activities: activities.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      personId: row.person_id || undefined,
+      title: row.title,
+      detail: row.detail,
+      amount: row.amount == null ? undefined : numberValue(row.amount),
+      createdAt: isoDateTime(row.created_at),
+    })),
+  };
+}
+
+function parseTags(value: string) {
+  return value.split(',').map((tag) => tag.trim()).filter(Boolean);
+}
+
+function buildShares(input: { amount: number; participantIds: string[]; splitType: 'equal' | 'custom'; customShares: Record<string, number> }) {
+  if (input.splitType === 'equal') {
+    const base = Math.round((input.amount / input.participantIds.length) * 100) / 100;
+    const shares = input.participantIds.map((contactId) => ({ contactId, amount: base }));
+    const sum = shares.reduce((total, share) => total + share.amount, 0);
+    shares[shares.length - 1].amount = Math.round((shares[shares.length - 1].amount + input.amount - sum) * 100) / 100;
+    return shares;
+  }
+  return input.participantIds.map((contactId) => ({ contactId, amount: Number(input.customShares[contactId] ?? 0) }));
+}
+
+async function activity(accountId: string, entityType: string, entityId: string, title: string, detail: string, amount?: number, personId?: string) {
+  await pool.query(
+    `insert into activity_logs (id, account_id, entity_type, entity_id, person_id, title, detail, amount, created_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, now())`,
+    [makeId('activity'), accountId, entityType, entityId, personId || null, title, detail, amount ?? null],
+  );
+}
+
+export default async function handler(request: VercelRequest, response: VercelResponse) {
+  setNoStore(response);
+
+  try {
+    const account = await requireAccount(request);
+    const action = readAction(request);
+    const payload = request.body?.payload ?? request.body ?? {};
+
+    if (request.method === 'GET' && action === 'snapshot') {
+      return ok(response, await readSnapshot(account.id));
+    }
+
+    if (request.method !== 'POST') return fail(response, 405, 'Method not allowed.');
+
+    if (account.role === 'superadmin' && action !== 'updatePreferences') {
+      return fail(response, 403, 'Superadmin accounts can only update their own preferences here.');
+    }
+
+    if (action === 'addContact') {
+      const input = contactSchema.parse(payload);
+      const id = makeId('contact');
+      await pool.query(
+        `insert into contacts (id, account_id, name, phone, notes, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, now(), now())`,
+        [id, account.id, input.name, input.phone || null, input.notes || null],
+      );
+      await activity(account.id, 'contact', id, `Added ${input.name}`, 'New person added to Expense Tracker.', undefined, id);
+      return ok(response);
+    }
+
+    if (action === 'updateContact') {
+      const input = contactSchema.parse(payload.input);
+      await pool.query('update contacts set name=$1, phone=$2, notes=$3, updated_at=now() where id=$4 and account_id=$5', [
+        input.name,
+        input.phone || null,
+        input.notes || null,
+        payload.id,
+        account.id,
+      ]);
+      return ok(response);
+    }
+
+    if (action === 'deleteContact') {
+      const id = payload.id;
+      const refs = await Promise.all([
+        pool.query('select 1 from loans where account_id=$1 and person_id=$2 limit 1', [account.id, id]),
+        pool.query('select 1 from item_records where account_id=$1 and person_id=$2 limit 1', [account.id, id]),
+      ]);
+      if (refs.some((result) => result.rowCount)) return fail(response, 400, 'This person has related records and cannot be deleted.');
+      await pool.query('delete from contacts where id=$1 and account_id=$2', [id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addExpense' || action === 'updateExpense') {
+      const input = expenseSchema.parse(action === 'addExpense' ? payload : payload.input);
+      const id = action === 'addExpense' ? makeId('expense') : payload.id;
+      if (action === 'addExpense') {
+        await pool.query(
+          `insert into expenses (id, account_id, amount, category, note, date, payment_method, tags, receipt_image, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
+          [id, account.id, input.amount, input.category, input.note, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null],
+        );
+        await activity(account.id, 'expense', id, `Spent ${input.amount} on ${input.category}`, input.note || input.paymentMethod, input.amount);
+      } else {
+        await pool.query(
+          `update expenses set amount=$1, category=$2, note=$3, date=$4, payment_method=$5, tags=$6, receipt_image=$7, updated_at=now()
+           where id=$8 and account_id=$9`,
+          [input.amount, input.category, input.note, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null, id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteExpense') {
+      await pool.query('delete from expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'duplicateExpense') {
+      const existing = await pool.query('select * from expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (!existing.rowCount) return fail(response, 404, 'Expense not found.');
+      const row = existing.rows[0];
+      const id = makeId('expense');
+      await pool.query(
+        `insert into expenses (id, account_id, amount, category, note, date, payment_method, tags, receipt_image, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,current_date,$6,$7,$8,now(),now())`,
+        [id, account.id, row.amount, row.category, row.note, row.payment_method, JSON.stringify(row.tags || []), row.receipt_image || null],
+      );
+      return ok(response);
+    }
+
+    if (action === 'addSharedGroup' || action === 'updateSharedGroup') {
+      const input = sharedGroupSchema.parse(action === 'addSharedGroup' ? payload : payload.input);
+      const id = action === 'addSharedGroup' ? makeId('group') : payload.id;
+      if (action === 'addSharedGroup') {
+        await pool.query(
+          `insert into shared_groups (id, account_id, name, description, participant_ids, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,now(),now())`,
+          [id, account.id, input.name, input.description, JSON.stringify(input.participantIds)],
+        );
+        await activity(account.id, 'sharedGroup', id, `Created ${input.name}`, 'Shared expense group added.');
+      } else {
+        await pool.query('update shared_groups set name=$1, description=$2, participant_ids=$3, updated_at=now() where id=$4 and account_id=$5', [
+          input.name,
+          input.description,
+          JSON.stringify(input.participantIds),
+          id,
+          account.id,
+        ]);
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteSharedGroup') {
+      await pool.query('delete from shared_groups where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addSharedExpense' || action === 'updateSharedExpense') {
+      const input = sharedExpenseSchema.parse(action === 'addSharedExpense' ? payload : payload.input);
+      const id = action === 'addSharedExpense' ? makeId('shared') : payload.id;
+      const shares = buildShares(input);
+      if (action === 'addSharedExpense') {
+        await pool.query(
+          `insert into shared_expenses
+           (id, account_id, group_id, amount, note, date, payer_id, participant_ids, split_type, shares, settled, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now())`,
+          [
+            id,
+            account.id,
+            input.groupId,
+            input.amount,
+            input.note,
+            input.date,
+            input.payerId,
+            JSON.stringify(input.participantIds),
+            input.splitType,
+            JSON.stringify(shares),
+            input.settled,
+          ],
+        );
+        await activity(account.id, 'sharedExpense', id, `Shared ${input.note}`, 'Split added to group.', input.amount);
+      } else {
+        await pool.query(
+          `update shared_expenses set group_id=$1, amount=$2, note=$3, date=$4, payer_id=$5, participant_ids=$6,
+           split_type=$7, shares=$8, settled=$9, updated_at=now() where id=$10 and account_id=$11`,
+          [
+            input.groupId,
+            input.amount,
+            input.note,
+            input.date,
+            input.payerId,
+            JSON.stringify(input.participantIds),
+            input.splitType,
+            JSON.stringify(shares),
+            input.settled,
+            id,
+            account.id,
+          ],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteSharedExpense') {
+      await pool.query('delete from shared_expenses where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'toggleSharedExpenseSettled') {
+      await pool.query('update shared_expenses set settled = not settled, updated_at=now() where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addLoan' || action === 'updateLoan') {
+      const input = loanSchema.parse(action === 'addLoan' ? payload : payload.input);
+      const id = action === 'addLoan' ? makeId('loan') : payload.id;
+      if (action === 'addLoan') {
+        await pool.query(
+          `insert into loans (id, account_id, person_id, direction, amount, date, due_date, notes, status, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
+          [id, account.id, input.personId, input.direction, input.amount, input.date, input.dueDate || null, input.notes, input.status],
+        );
+        await activity(account.id, 'loan', id, input.direction === 'lent' ? 'Money lent' : 'Money borrowed', input.notes || 'Loan record added.', input.amount, input.personId);
+      } else {
+        await pool.query(
+          `update loans set person_id=$1, direction=$2, amount=$3, date=$4, due_date=$5, notes=$6, status=$7, updated_at=now()
+           where id=$8 and account_id=$9`,
+          [input.personId, input.direction, input.amount, input.date, input.dueDate || null, input.notes, input.status, id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteLoan') {
+      await pool.query('delete from loans where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addLoanPayment') {
+      const input = loanPaymentSchema.parse(payload);
+      const id = makeId('payment');
+      await pool.query(
+        `insert into loan_payments (id, account_id, loan_id, amount, date, note, created_at)
+         values ($1,$2,$3,$4,$5,$6,now())`,
+        [id, account.id, input.loanId, input.amount, input.date, input.note],
+      );
+      await activity(account.id, 'loanPayment', id, 'Loan repayment recorded', input.note || 'Partial payment added.', input.amount);
+      return ok(response);
+    }
+
+    if (action === 'deleteLoanPayment') {
+      await pool.query('delete from loan_payments where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addItem' || action === 'updateItem') {
+      const input = itemSchema.parse(action === 'addItem' ? payload : payload.input);
+      const id = action === 'addItem' ? makeId('item') : payload.id;
+      if (action === 'addItem') {
+        await pool.query(
+          `insert into item_records (id, account_id, item_name, person_id, direction, date, due_date, note, status, returned_date, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now())`,
+          [id, account.id, input.itemName, input.personId, input.direction, input.date, input.dueDate || null, input.note, input.status, input.returnedDate || null],
+        );
+        await activity(account.id, 'item', id, input.direction === 'lent' ? `Lent ${input.itemName}` : `Borrowed ${input.itemName}`, input.note || 'Item record added.', undefined, input.personId);
+      } else {
+        await pool.query(
+          `update item_records set item_name=$1, person_id=$2, direction=$3, date=$4, due_date=$5, note=$6, status=$7,
+           returned_date=$8, updated_at=now() where id=$9 and account_id=$10`,
+          [input.itemName, input.personId, input.direction, input.date, input.dueDate || null, input.note, input.status, input.returnedDate || null, id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteItem') {
+      await pool.query('delete from item_records where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'markItemReturned') {
+      await pool.query(`update item_records set status='returned', returned_date=current_date, updated_at=now() where id=$1 and account_id=$2`, [
+        payload.id,
+        account.id,
+      ]);
+      return ok(response);
+    }
+
+    if (action === 'addSubscription' || action === 'updateSubscription') {
+      const input = subscriptionSchema.parse(action === 'addSubscription' ? payload : payload.input);
+      const id = action === 'addSubscription' ? makeId('subscription') : payload.id;
+      if (action === 'addSubscription') {
+        await pool.query(
+          `insert into subscriptions (id, account_id, name, amount, cycle, category, next_due_date, auto_renew, notes, status, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now())`,
+          [id, account.id, input.name, input.amount, input.cycle, input.category, input.nextDueDate, input.autoRenew, input.notes, input.status],
+        );
+        await activity(account.id, 'subscription', id, `Added ${input.name}`, `${input.cycle} recurring payment.`, input.amount);
+      } else {
+        await pool.query(
+          `update subscriptions set name=$1, amount=$2, cycle=$3, category=$4, next_due_date=$5, auto_renew=$6,
+           notes=$7, status=$8, updated_at=now() where id=$9 and account_id=$10`,
+          [input.name, input.amount, input.cycle, input.category, input.nextDueDate, input.autoRenew, input.notes, input.status, id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteSubscription') {
+      await pool.query('delete from subscriptions where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'updatePreferences') {
+      const input = preferencesSchema.parse(payload);
+      await ensurePreferences(account.id);
+      await pool.query(
+        `update preferences set currency=$1, reminder_days_before=$2, notifications_enabled=$3, theme=$4, updated_at=now()
+         where account_id=$5`,
+        [input.currency, input.reminderDaysBefore, input.notificationsEnabled, input.theme, account.id],
+      );
+      return ok(response);
+    }
+
+    if (action === 'dismissReminder') {
+      await pool.query(`update reminders set status='dismissed', updated_at=now() where id=$1 and account_id=$2`, [payload.id, account.id]);
+      return ok(response);
+    }
+
+    return fail(response, 404, `Unknown app action: ${action}`);
+  } catch (error) {
+    return handleError(response, error);
+  }
+}
