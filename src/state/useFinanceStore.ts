@@ -9,6 +9,7 @@ import type {
 import type {
   ContactInput,
   ExpenseInput,
+  IncomeInput,
   ItemInput,
   LoanInput,
   LoanPaymentInput,
@@ -16,6 +17,7 @@ import type {
   SharedExpenseInput,
   SharedGroupInput,
   SubscriptionInput,
+  TransferInput,
 } from '../domain/validation';
 import { apiFetch, postApi } from '../lib/api';
 
@@ -34,6 +36,8 @@ function emptySnapshot(): AppDataSnapshot {
     preferences: defaultPreferences,
     contacts: [],
     expenses: [],
+    incomes: [],
+    transfers: [],
     sharedGroups: [],
     sharedExpenses: [],
     loans: [],
@@ -79,6 +83,12 @@ interface FinanceState extends AppDataSnapshot {
   updateExpense: (id: ID, input: ExpenseInput) => Promise<void>;
   deleteExpense: (id: ID) => Promise<void>;
   duplicateExpense: (id: ID) => Promise<void>;
+  addIncome: (input: IncomeInput) => Promise<void>;
+  updateIncome: (id: ID, input: IncomeInput) => Promise<void>;
+  deleteIncome: (id: ID) => Promise<void>;
+  addTransfer: (input: TransferInput) => Promise<void>;
+  updateTransfer: (id: ID, input: TransferInput) => Promise<void>;
+  deleteTransfer: (id: ID) => Promise<void>;
   addSharedGroup: (input: SharedGroupInput) => Promise<SharedGroup>;
   updateSharedGroup: (id: ID, input: SharedGroupInput) => Promise<void>;
   deleteSharedGroup: (id: ID) => Promise<void>;
@@ -152,6 +162,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     updateExpense: async (id, input) => run('updateExpense', { id, input }),
     deleteExpense: async (id) => run('deleteExpense', { id }),
     duplicateExpense: async (id) => run('duplicateExpense', { id }),
+    addIncome: async (input) => run('addIncome', input),
+    updateIncome: async (id, input) => run('updateIncome', { id, input }),
+    deleteIncome: async (id) => run('deleteIncome', { id }),
+    addTransfer: async (input) => run('addTransfer', input),
+    updateTransfer: async (id, input) => run('updateTransfer', { id, input }),
+    deleteTransfer: async (id) => run('deleteTransfer', { id }),
     addSharedGroup: async (input) => {
       await run('addSharedGroup', input);
       return get().sharedGroups[0];

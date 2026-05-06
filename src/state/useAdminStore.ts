@@ -7,6 +7,8 @@ export interface AdminAccountSummary {
   counts: {
     contacts: number;
     expenses: number;
+    incomes: number;
+    transfers: number;
     sharedGroups: number;
     sharedExpenses: number;
     loans: number;

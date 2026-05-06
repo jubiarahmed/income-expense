@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   contactSchema,
   expenseSchema,
+  incomeSchema,
   itemSchema,
   loanPaymentSchema,
   loanSchema,
@@ -9,6 +10,7 @@ import {
   sharedExpenseSchema,
   sharedGroupSchema,
   subscriptionSchema,
+  transferSchema,
 } from '../src/domain/validation.js';
 import { makeId, requireAccount } from './_lib/auth.js';
 import { pool } from './_lib/db.js';
@@ -43,6 +45,8 @@ async function readSnapshot(accountId: string) {
     preferences,
     contacts,
     expenses,
+    incomes,
+    transfers,
     sharedGroups,
     sharedExpenses,
     loans,
@@ -55,6 +59,8 @@ async function readSnapshot(accountId: string) {
     pool.query('select * from preferences where account_id = $1 limit 1', [accountId]),
     pool.query('select * from contacts where account_id = $1 order by name asc', [accountId]),
     pool.query('select * from expenses where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from incomes where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from transfers where account_id = $1 order by date desc, created_at desc', [accountId]),
     pool.query('select * from shared_groups where account_id = $1 order by updated_at desc', [accountId]),
     pool.query('select * from shared_expenses where account_id = $1 order by date desc, created_at desc', [accountId]),
     pool.query('select * from loans where account_id = $1 order by updated_at desc', [accountId]),
@@ -96,6 +102,30 @@ async function readSnapshot(accountId: string) {
       paymentMethod: row.payment_method,
       tags: row.tags || [],
       receiptImage: row.receipt_image || undefined,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    incomes: incomes.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      amount: numberValue(row.amount),
+      category: row.category,
+      source: row.source || '',
+      note: row.note || '',
+      date: isoDate(row.date),
+      paymentMethod: row.payment_method,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    transfers: transfers.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      amount: numberValue(row.amount),
+      fromMethod: row.from_method,
+      toMethod: row.to_method,
+      fee: numberValue(row.fee),
+      date: isoDate(row.date),
+      note: row.note || '',
       createdAt: isoDateTime(row.created_at),
       updatedAt: isoDateTime(row.updated_at),
     })),
@@ -309,6 +339,56 @@ export default async function handler(request: VercelRequest, response: VercelRe
          values ($1,$2,$3,$4,$5,current_date,$6,$7,$8,now(),now())`,
         [id, account.id, row.amount, row.category, row.note, row.payment_method, JSON.stringify(row.tags || []), row.receipt_image || null],
       );
+      return ok(response);
+    }
+
+    if (action === 'addIncome' || action === 'updateIncome') {
+      const input = incomeSchema.parse(action === 'addIncome' ? payload : payload.input);
+      const id = action === 'addIncome' ? makeId('income') : payload.id;
+      if (action === 'addIncome') {
+        await pool.query(
+          `insert into incomes (id, account_id, amount, category, source, note, date, payment_method, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
+          [id, account.id, input.amount, input.category, input.source, input.note, input.date, input.paymentMethod],
+        );
+        await activity(account.id, 'income', id, `Income ${input.category}`, input.source || input.note || input.paymentMethod, input.amount);
+      } else {
+        await pool.query(
+          `update incomes set amount=$1, category=$2, source=$3, note=$4, date=$5, payment_method=$6, updated_at=now()
+           where id=$7 and account_id=$8`,
+          [input.amount, input.category, input.source, input.note, input.date, input.paymentMethod, id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteIncome') {
+      await pool.query('delete from incomes where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addTransfer' || action === 'updateTransfer') {
+      const input = transferSchema.parse(action === 'addTransfer' ? payload : payload.input);
+      const id = action === 'addTransfer' ? makeId('transfer') : payload.id;
+      if (action === 'addTransfer') {
+        await pool.query(
+          `insert into transfers (id, account_id, amount, from_method, to_method, fee, date, note, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
+          [id, account.id, input.amount, input.fromMethod, input.toMethod, input.fee, input.date, input.note],
+        );
+        await activity(account.id, 'transfer', id, `${input.fromMethod} → ${input.toMethod}`, input.note || 'Funds moved between accounts.', input.amount);
+      } else {
+        await pool.query(
+          `update transfers set amount=$1, from_method=$2, to_method=$3, fee=$4, date=$5, note=$6, updated_at=now()
+           where id=$7 and account_id=$8`,
+          [input.amount, input.fromMethod, input.toMethod, input.fee, input.date, input.note, id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteTransfer') {
+      await pool.query('delete from transfers where id=$1 and account_id=$2', [payload.id, account.id]);
       return ok(response);
     }
 

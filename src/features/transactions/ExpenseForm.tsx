@@ -8,12 +8,20 @@ import { compressImageToDataUrl } from '../../lib/compressImage';
 import { todayISO } from '../../lib/date';
 import { useFinanceStore } from '../../state/useFinanceStore';
 
-export function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone?: () => void }) {
+export function ExpenseForm({
+  expense,
+  initialCategory,
+  onDone,
+}: {
+  expense?: Expense;
+  initialCategory?: ExpenseCategory;
+  onDone?: () => void;
+}) {
   const addExpense = useFinanceStore((state) => state.addExpense);
   const updateExpense = useFinanceStore((state) => state.updateExpense);
   const expenses = useFinanceStore((state) => state.expenses);
   const [amount, setAmount] = useState(expense?.amount.toString() ?? '');
-  const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? 'Food');
+  const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? initialCategory ?? 'Food');
   const [note, setNote] = useState(expense?.note ?? '');
   const [date, setDate] = useState(expense?.date ?? todayISO());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod ?? 'Cash');
@@ -78,21 +86,21 @@ export function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone?: (
       </Field>
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Category</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Category</p>
         <div className="flex flex-wrap gap-2">
           {EXPENSE_CATEGORIES.map((item) => (
-            <ChipButton key={item} active={category === item} onClick={() => setCategory(item)}>
+            <ChipButton key={item} active={category === item} onClick={() => setCategory(item)} tone="expense">
               {item}
             </ChipButton>
           ))}
         </div>
         {recentCategories.length ? (
-          <p className="text-xs text-slate-500">Recent: {recentCategories.join(', ')}</p>
+          <p className="text-xs text-zinc-500">Recent: {recentCategories.join(', ')}</p>
         ) : null}
       </div>
 
       <Field label="Note">
-        <TextArea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Lunch, bus fare, recharge..." />
+        <TextArea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Lunch, bus fare, recharge…" />
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
@@ -115,7 +123,7 @@ export function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone?: (
       </Field>
 
       <div className="space-y-2">
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Receipt photo</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Receipt photo</p>
         <input
           ref={fileInputRef}
           type="file"
@@ -126,12 +134,12 @@ export function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone?: (
         />
         {receiptImage ? (
           <div className="relative">
-            <img src={receiptImage} alt="Receipt" className="h-40 w-full rounded-xl object-cover ring-1 ring-slate-200 dark:ring-slate-800" />
+            <img src={receiptImage} alt="Receipt" className="h-40 w-full rounded-xl object-cover ring-1 ring-zinc-200 dark:ring-zinc-800" />
             <button
               type="button"
               onClick={() => setReceiptImage(undefined)}
               aria-label="Remove receipt"
-              className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-slate-900/80 text-white"
+              className="absolute right-2 top-2 grid h-9 w-9 place-items-center rounded-full bg-zinc-900/80 text-white"
             >
               <Trash2 size={16} />
             </button>
@@ -144,14 +152,14 @@ export function ExpenseForm({ expense, onDone }: { expense?: Expense; onDone?: (
             onClick={() => fileInputRef.current?.click()}
             disabled={photoBusy}
           >
-            {photoBusy ? 'Processing...' : 'Attach receipt'}
+            {photoBusy ? 'Processing…' : 'Attach receipt'}
           </Button>
         )}
       </div>
 
       {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
-      <Button className="w-full" type="submit" disabled={saving || photoBusy}>
-        {saving ? 'Saving...' : expense ? 'Save expense' : 'Add expense'}
+      <Button variant="danger" className="w-full" type="submit" disabled={saving || photoBusy}>
+        {saving ? 'Saving…' : expense ? 'Save expense' : 'Add expense'}
       </Button>
     </form>
   );

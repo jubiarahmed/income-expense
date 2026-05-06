@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { BarChart3, Home, Plus, Settings, Shield, UserRound, WalletCards } from 'lucide-react';
+import { ArrowLeftRight, BarChart3, Home, Plus, Settings, Shield, UserRound, WalletCards } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlobalAddSheet } from './GlobalAddSheet';
 import { useAuthStore } from '../../state/useAuthStore';
@@ -7,15 +7,15 @@ import { useUiStore } from '../../state/useUiStore';
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: Home },
-  { to: '/transactions', label: 'Transactions', icon: WalletCards },
+  { to: '/transactions', label: 'Records', icon: WalletCards },
   { to: '/people', label: 'People', icon: UserRound },
   { to: '/obligations', label: 'Obligations', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 const titles: Record<string, string> = {
-  '/': 'Expense Tracker',
-  '/transactions': 'Transactions',
+  '/': 'Home',
+  '/transactions': 'Records',
   '/people': 'People',
   '/obligations': 'Obligations',
   '/settings': 'Settings',
@@ -36,12 +36,19 @@ export function AppShell() {
     : baseTabs;
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
-      <header className="safe-top sticky top-0 z-30 border-b border-slate-200/80 bg-slate-50/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+    <div className="min-h-dvh bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+      <header className="safe-top sticky top-0 z-30 border-b border-zinc-200/80 bg-zinc-50/80 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80">
         <div className="mx-auto flex h-16 max-w-xl items-center justify-between px-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">Expense Tracker</p>
-            <h1 className="text-xl font-black">{title}</h1>
+          <div className="flex items-center gap-3">
+            <span className="gradient-brand grid h-9 w-9 place-items-center rounded-xl text-sm font-black text-white shadow-sm">
+              E
+            </span>
+            <div>
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-indigo-600 dark:text-indigo-400">
+                Expense Tracker
+              </p>
+              <h1 className="text-lg font-black tracking-tight">{title}</h1>
+            </div>
           </div>
         </div>
       </header>
@@ -54,14 +61,14 @@ export function AppShell() {
         <button
           type="button"
           onClick={() => openAddFlow('chooser')}
-          className="fixed bottom-[5.6rem] left-1/2 z-40 grid h-14 w-14 -translate-x-1/2 place-items-center rounded-full bg-teal-700 text-white shadow-xl shadow-teal-900/20 active:scale-95"
+          className="gradient-brand fixed bottom-[5.6rem] left-1/2 z-40 grid h-14 w-14 -translate-x-1/2 place-items-center rounded-full text-white shadow-xl shadow-indigo-900/30 active:scale-95"
           aria-label="Add"
         >
-          <Plus size={28} />
+          <Plus size={28} strokeWidth={2.4} />
         </button>
       ) : null}
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/90 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90">
         <div className="mx-auto grid h-20 max-w-xl px-2" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -72,8 +79,8 @@ export function AppShell() {
                 end={tab.to === '/'}
                 className={({ isActive }) =>
                   clsx(
-                    'flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[0.68rem] font-bold transition',
-                    isActive ? 'text-teal-700 dark:text-teal-300' : 'text-slate-500 dark:text-slate-400',
+                    'flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[0.68rem] font-bold tracking-tight transition',
+                    isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-zinc-500 dark:text-zinc-400',
                   )
                 }
               >
@@ -82,7 +89,7 @@ export function AppShell() {
                     <span
                       className={clsx(
                         'grid h-8 w-10 place-items-center rounded-full transition',
-                        isActive ? 'bg-teal-50 dark:bg-teal-950' : 'bg-transparent',
+                        isActive ? 'bg-indigo-50 dark:bg-indigo-950' : 'bg-transparent',
                       )}
                     >
                       <Icon size={20} strokeWidth={isActive ? 2.6 : 2.2} />
@@ -99,3 +106,5 @@ export function AppShell() {
     </div>
   );
 }
+
+void ArrowLeftRight;

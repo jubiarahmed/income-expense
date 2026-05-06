@@ -8,14 +8,46 @@ export type AccountRole = 'user' | 'superadmin';
 export type AccountStatus = 'active' | 'held';
 
 export type ExpenseCategory =
-  | 'Food'
-  | 'Transport'
-  | 'Bills'
   | 'Shopping'
+  | 'Food'
+  | 'Phone'
+  | 'Entertainment'
+  | 'Education'
+  | 'Beauty'
+  | 'Sports'
+  | 'Social'
+  | 'Transportation'
+  | 'Clothing'
+  | 'Car'
+  | 'Alcohol'
+  | 'Cigarettes'
+  | 'Electronics'
+  | 'Travel'
+  | 'Health'
+  | 'Pets'
+  | 'Repairs'
+  | 'Housing'
+  | 'Home'
+  | 'Gifts'
+  | 'Donations'
+  | 'Lottery'
+  | 'Snacks'
+  | 'Kids'
+  | 'Vegetables'
+  | 'Fruits'
+  | 'Bills'
   | 'Medicine'
   | 'Recharge'
-  | 'Entertainment'
   | 'Other';
+
+export type IncomeCategory =
+  | 'Salary'
+  | 'Investments'
+  | 'Part-Time'
+  | 'Bonus'
+  | 'Gift'
+  | 'Refund'
+  | 'Others';
 
 export type PaymentMethod = 'Cash' | 'bKash' | 'Nagad' | 'Card' | 'Bank' | 'Other';
 export type SplitType = 'equal' | 'custom';
@@ -29,6 +61,8 @@ export type ReminderSourceType = 'loan' | 'item' | 'subscription';
 export type ReminderStatus = 'scheduled' | 'sent' | 'dismissed';
 export type ActivityEntityType =
   | 'expense'
+  | 'income'
+  | 'transfer'
   | 'sharedExpense'
   | 'sharedGroup'
   | 'loan'
@@ -96,6 +130,32 @@ export interface Expense {
   paymentMethod: PaymentMethod;
   tags: string[];
   receiptImage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Income {
+  id: ID;
+  accountId: ID;
+  amount: number;
+  category: IncomeCategory;
+  source: string;
+  note: string;
+  date: string;
+  paymentMethod: PaymentMethod;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Transfer {
+  id: ID;
+  accountId: ID;
+  amount: number;
+  fromMethod: PaymentMethod;
+  toMethod: PaymentMethod;
+  fee: number;
+  date: string;
+  note: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -218,6 +278,8 @@ export interface AppDataSnapshot {
   preferences: UserPreferences;
   contacts: Contact[];
   expenses: Expense[];
+  incomes: Income[];
+  transfers: Transfer[];
   sharedGroups: SharedGroup[];
   sharedExpenses: SharedExpense[];
   loans: Loan[];

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Activity, ArrowLeft, HandCoins, Mail, PackageOpen, Phone, ReceiptText, Repeat, StickyNote, Users } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowLeft, ArrowLeftRight, ArrowUpRight, HandCoins, Mail, PackageOpen, Phone, ReceiptText, Repeat, StickyNote, Users } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -31,9 +31,11 @@ export function UserSnapshotView() {
   }, [snapshot]);
 
   const totals = useMemo(() => {
-    if (!snapshot) return { expenses: 0, lent: 0, borrowed: 0, subsMonthly: 0 };
+    if (!snapshot) return { expenses: 0, incomes: 0, transfers: 0, lent: 0, borrowed: 0, subsMonthly: 0 };
     return {
       expenses: snapshot.expenses.reduce((sum, item) => sum + item.amount, 0),
+      incomes: snapshot.incomes.reduce((sum, item) => sum + item.amount, 0),
+      transfers: snapshot.transfers.reduce((sum, item) => sum + item.amount, 0),
       lent: snapshot.loans.filter((l) => l.direction === 'lent').reduce((sum, l) => sum + l.amount, 0),
       borrowed: snapshot.loans.filter((l) => l.direction === 'borrowed').reduce((sum, l) => sum + l.amount, 0),
       subsMonthly: snapshot.subscriptions
@@ -77,10 +79,12 @@ export function UserSnapshotView() {
       {snapshot ? (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <SummaryCard label="Total expenses" value={formatMoney(totals.expenses, currency)} icon={<ReceiptText size={18} />} />
+            <SummaryCard label="Total income" value={formatMoney(totals.incomes, currency)} icon={<ArrowUpRight size={18} />} />
+            <SummaryCard label="Total expenses" value={formatMoney(totals.expenses, currency)} icon={<ArrowDownRight size={18} />} />
+            <SummaryCard label="Total transfers" value={formatMoney(totals.transfers, currency)} icon={<ArrowLeftRight size={18} />} />
+            <SummaryCard label="Subs / mo" value={formatMoney(totals.subsMonthly, currency)} icon={<Repeat size={18} />} />
             <SummaryCard label="Money lent" value={formatMoney(totals.lent, currency)} icon={<HandCoins size={18} />} />
             <SummaryCard label="Money borrowed" value={formatMoney(totals.borrowed, currency)} icon={<HandCoins size={18} />} />
-            <SummaryCard label="Subs / mo" value={formatMoney(totals.subsMonthly, currency)} icon={<Repeat size={18} />} />
           </div>
 
           <Section icon={<Users size={16} />} title={`Contacts (${snapshot.contacts.length})`}>
@@ -106,6 +110,46 @@ export function UserSnapshotView() {
               </div>
             ) : (
               <p className="text-sm text-slate-500">No contacts.</p>
+            )}
+          </Section>
+
+          <Section icon={<ArrowUpRight size={16} />} title={`Incomes (${snapshot.incomes.length})`}>
+            {snapshot.incomes.length ? (
+              <div className="space-y-2">
+                {snapshot.incomes.slice(0, 50).map((income) => (
+                  <Row
+                    key={income.id}
+                    title={`${income.category}${income.source ? ` — ${income.source}` : ''}`}
+                    subtitle={`${formatFullDate(income.date)} · ${income.paymentMethod}${income.note ? ` · ${income.note}` : ''}`}
+                    amount={formatMoney(income.amount, currency)}
+                  />
+                ))}
+                {snapshot.incomes.length > 50 ? (
+                  <p className="text-xs text-zinc-500">Showing latest 50 of {snapshot.incomes.length}.</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">No income records.</p>
+            )}
+          </Section>
+
+          <Section icon={<ArrowLeftRight size={16} />} title={`Transfers (${snapshot.transfers.length})`}>
+            {snapshot.transfers.length ? (
+              <div className="space-y-2">
+                {snapshot.transfers.slice(0, 50).map((transfer) => (
+                  <Row
+                    key={transfer.id}
+                    title={`${transfer.fromMethod} → ${transfer.toMethod}`}
+                    subtitle={`${formatFullDate(transfer.date)}${transfer.fee ? ` · fee ${formatMoney(transfer.fee, currency)}` : ''}${transfer.note ? ` · ${transfer.note}` : ''}`}
+                    amount={formatMoney(transfer.amount, currency)}
+                  />
+                ))}
+                {snapshot.transfers.length > 50 ? (
+                  <p className="text-xs text-zinc-500">Showing latest 50 of {snapshot.transfers.length}.</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">No transfers.</p>
             )}
           </Section>
 

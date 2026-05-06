@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EXPENSE_CATEGORIES, PAYMENT_METHODS, SUBSCRIPTION_CYCLES } from './constants.js';
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS, SUBSCRIPTION_CYCLES } from './constants.js';
 
 const idSchema = z.string().min(1);
 const moneySchema = z.coerce.number().positive('Enter an amount greater than 0');
@@ -21,6 +21,29 @@ export const expenseSchema = z.object({
   tags: z.string().optional().default(''),
   receiptImage: z.string().optional(),
 });
+
+export const incomeSchema = z.object({
+  amount: moneySchema,
+  category: z.enum(INCOME_CATEGORIES),
+  source: z.string().trim().optional().default(''),
+  note: z.string().trim().optional().default(''),
+  date: dateSchema,
+  paymentMethod: z.enum(PAYMENT_METHODS),
+});
+
+export const transferSchema = z
+  .object({
+    amount: moneySchema,
+    fromMethod: z.enum(PAYMENT_METHODS),
+    toMethod: z.enum(PAYMENT_METHODS),
+    fee: z.coerce.number().min(0).optional().default(0),
+    date: dateSchema,
+    note: z.string().trim().optional().default(''),
+  })
+  .refine((input) => input.fromMethod !== input.toMethod, {
+    message: 'From and To accounts must be different',
+    path: ['toMethod'],
+  });
 
 export const sharedGroupSchema = z.object({
   name: z.string().trim().min(1, 'Group name is required'),
@@ -105,6 +128,8 @@ export const signInSchema = z.object({
 
 export type ContactInput = z.infer<typeof contactSchema>;
 export type ExpenseInput = z.infer<typeof expenseSchema>;
+export type IncomeInput = z.infer<typeof incomeSchema>;
+export type TransferInput = z.infer<typeof transferSchema>;
 export type SharedGroupInput = z.infer<typeof sharedGroupSchema>;
 export type SharedExpenseInput = z.infer<typeof sharedExpenseSchema>;
 export type LoanInput = z.infer<typeof loanSchema>;

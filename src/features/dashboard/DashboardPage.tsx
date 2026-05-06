@@ -1,26 +1,27 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bar, BarChart, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { format, startOfMonth, subMonths } from 'date-fns';
-import { AlertTriangle, CalendarClock, ChevronRight, Plus, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, ChevronRight, Plus } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PullToRefresh } from '../../components/ui/PullToRefresh';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import {
   getExpenseTotals,
-  getLast7DayTrend,
+  getIncomeTotals,
   getObligationStats,
   getUpcomingObligations,
 } from '../../lib/calculations';
-import { formatShortDate, getMonthRange, toISODate } from '../../lib/date';
+import { formatShortDate, getMonthRange } from '../../lib/date';
 import { formatMoney, roundMoney } from '../../lib/money';
 import { useFinanceStore } from '../../state/useFinanceStore';
 import { useUiStore } from '../../state/useUiStore';
+import { getExpenseCategoryStyle } from '../../domain/categoryIcons';
+import type { ExpenseCategory } from '../../domain/models';
 
-const colors = ['#0f766e', '#f59e0b', '#4f46e5', '#e11d48', '#0891b2', '#7c3aed', '#16a34a', '#64748b'];
+const pieColors = ['#4f46e5', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#f43f5e', '#84cc16'];
 
 type ObligationMode = 'loans' | 'items' | 'subscriptions';
 type Period = 'thisMonth' | 'lastMonth' | 'allTime';
@@ -38,64 +39,88 @@ function getPeriodRange(period: Period): { start?: string; end?: string } {
   return {};
 }
 
-function getLast6MonthTotals(expenses: { amount: number; date: string }[]) {
+function inRange<T extends { date: string }>(items: T[], range: { start?: string; end?: string }) {
+  if (!range.start && !range.end) return items;
+  return items.filter((item) => (!range.start || item.date >= range.start) && (!range.end || item.date <= range.end));
+}
+
+function getLast6MonthSeries(
+  expenses: { amount: number; date: string }[],
+  incomes: { amount: number; date: string }[],
+) {
   const now = new Date();
-  const buckets: { key: string; label: string; amount: number }[] = [];
+  const buckets = [];
   for (let offset = 5; offset >= 0; offset -= 1) {
     const month = subMonths(now, offset);
     buckets.push({
       key: format(startOfMonth(month), 'yyyy-MM'),
       label: format(month, 'MMM'),
-      amount: 0,
+      expense: 0,
+      income: 0,
     });
   }
   for (const expense of expenses) {
-    const key = expense.date.slice(0, 7);
-    const bucket = buckets.find((entry) => entry.key === key);
-    if (bucket) bucket.amount += expense.amount;
+    const bucket = buckets.find((entry) => entry.key === expense.date.slice(0, 7));
+    if (bucket) bucket.expense += expense.amount;
   }
-  return buckets.map((bucket) => ({ ...bucket, amount: roundMoney(bucket.amount) }));
+  for (const income of incomes) {
+    const bucket = buckets.find((entry) => entry.key === income.date.slice(0, 7));
+    if (bucket) bucket.income += income.amount;
+  }
+  return buckets.map((bucket) => ({
+    ...bucket,
+    expense: roundMoney(bucket.expense),
+    income: roundMoney(bucket.income),
+  }));
 }
 
 function categoryBreakdown(expenses: { amount: number; category: string; date: string }[], range: { start?: string; end?: string }) {
   const totals = new Map<string, number>();
-  expenses
-    .filter((expense) => (!range.start || expense.date >= range.start) && (!range.end || expense.date <= range.end))
-    .forEach((expense) => totals.set(expense.category, (totals.get(expense.category) ?? 0) + expense.amount));
+  inRange(expenses, range).forEach((expense) =>
+    totals.set(expense.category, (totals.get(expense.category) ?? 0) + expense.amount),
+  );
   return [...totals.entries()]
     .map(([name, value]) => ({ name, value: roundMoney(value) }))
     .sort((a, b) => b.value - a.value);
 }
 
 export function DashboardPage() {
-  const { preferences, contacts, expenses, loans, loanPayments, sharedExpenses, items, subscriptions, activities } = useFinanceStore();
+  const {
+    preferences,
+    contacts,
+    expenses,
+    incomes,
+    loans,
+    loanPayments,
+    sharedExpenses,
+    items,
+    subscriptions,
+    activities,
+  } = useFinanceStore();
   const reload = useFinanceStore((state) => state.reload);
   const openAddFlow = useUiStore((state) => state.openAddFlow);
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>('thisMonth');
-  const totals = getExpenseTotals(expenses);
   const stats = getObligationStats(contacts, loans, loanPayments, sharedExpenses, items, subscriptions);
 
   const range = useMemo(() => getPeriodRange(period), [period]);
-  const periodExpenses = useMemo(() => {
-    if (!range.start && !range.end) return expenses;
-    return expenses.filter(
-      (expense) => (!range.start || expense.date >= range.start) && (!range.end || expense.date <= range.end),
-    );
-  }, [expenses, range]);
-  const periodTotal = useMemo(
+  const periodExpenses = useMemo(() => inRange(expenses, range), [expenses, range]);
+  const periodIncomes = useMemo(() => inRange(incomes, range), [incomes, range]);
+  const totals = getExpenseTotals(expenses);
+  const incomeTotals = getIncomeTotals(incomes);
+  const periodExpenseTotal = useMemo(
     () => roundMoney(periodExpenses.reduce((sum, expense) => sum + expense.amount, 0)),
     [periodExpenses],
   );
+  const periodIncomeTotal = useMemo(
+    () => roundMoney(periodIncomes.reduce((sum, income) => sum + income.amount, 0)),
+    [periodIncomes],
+  );
+  const periodNet = roundMoney(periodIncomeTotal - periodExpenseTotal);
   const categories = useMemo(() => categoryBreakdown(expenses, range), [expenses, range]);
-  const trend = getLast7DayTrend(expenses);
-  const monthlyTrend = useMemo(() => getLast6MonthTotals(expenses), [expenses]);
+  const monthlySeries = useMemo(() => getLast6MonthSeries(expenses, incomes), [expenses, incomes]);
   const upcoming = getUpcomingObligations(loans, loanPayments, items, subscriptions).slice(0, 6);
-
-  const todayISO = toISODate(new Date());
-  const periodToday = period === 'thisMonth' || period === 'allTime'
-    ? totals.today
-    : roundMoney(periodExpenses.filter((expense) => expense.date === todayISO).reduce((sum, e) => sum + e.amount, 0));
+  const todayNet = roundMoney(incomeTotals.today - totals.today);
 
   function goToObligations(mode: ObligationMode) {
     navigate('/obligations', { state: { mode } });
@@ -114,51 +139,89 @@ export function DashboardPage() {
           ]}
         />
 
+        <BalanceHero
+          currency={preferences.currency}
+          income={periodIncomeTotal}
+          expense={periodExpenseTotal}
+          net={periodNet}
+          periodLabel={periodLabel[period]}
+        />
+
         <section className="grid grid-cols-2 gap-3">
-          <SummaryCard label="Today" value={formatMoney(periodToday, preferences.currency)} icon={<TrendingDown size={18} />} tone="teal" />
-          <SummaryCard label={periodLabel[period]} value={formatMoney(periodTotal, preferences.currency)} icon={<TrendingUp size={18} />} tone="indigo" onClick={() => navigate('/transactions')} />
-          <SummaryCard label="People owe me" value={formatMoney(stats.peopleOweMe, preferences.currency)} icon={<ChevronRight size={18} />} tone="emerald" onClick={() => navigate('/people')} />
-          <SummaryCard label="I owe others" value={formatMoney(stats.iOweOthers, preferences.currency)} icon={<AlertTriangle size={18} />} tone="amber" onClick={() => navigate('/people')} />
+          <SummaryCard
+            label="Income today"
+            value={formatMoney(incomeTotals.today, preferences.currency)}
+            tone="emerald"
+            icon={<ArrowUpRight size={18} />}
+          />
+          <SummaryCard
+            label="Spent today"
+            value={formatMoney(totals.today, preferences.currency)}
+            tone="rose"
+            icon={<ArrowDownRight size={18} />}
+          />
+          <SummaryCard
+            label="People owe me"
+            value={formatMoney(stats.peopleOweMe, preferences.currency)}
+            tone="indigo"
+            icon={<ChevronRight size={18} />}
+            onClick={() => navigate('/people')}
+          />
+          <SummaryCard
+            label="I owe others"
+            value={formatMoney(stats.iOweOthers, preferences.currency)}
+            tone="amber"
+            icon={<AlertTriangle size={18} />}
+            onClick={() => navigate('/people')}
+          />
         </section>
 
-        <Button variant="secondary" className="w-full" icon={<Plus size={16} />} onClick={() => openAddFlow('expense')}>
-          Log today's expense
-        </Button>
+        <div className="grid grid-cols-3 gap-2">
+          <QuickAction tone="rose" label="Expense" onClick={() => openAddFlow('expense')} />
+          <QuickAction tone="emerald" label="Income" onClick={() => openAddFlow('income')} />
+          <QuickAction tone="sky" label="Transfer" onClick={() => openAddFlow('transfer')} />
+        </div>
 
-        <Card className="bg-slate-950 text-white dark:bg-slate-900">
+        <Card className="gradient-balance text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-slate-300">Subscriptions</p>
-              <p className="mt-1 text-2xl font-black">{formatMoney(stats.subscriptionMonthlyTotal, preferences.currency)}</p>
-              <p className="mt-1 text-xs text-slate-400">
-                {stats.activeSubscriptions} active, {formatMoney(stats.subscriptionYearlyEstimate, preferences.currency)} yearly estimate
+              <p className="text-xs font-bold uppercase tracking-wide text-white/70">Subscriptions</p>
+              <p className="mt-1 text-2xl font-black tracking-tight">{formatMoney(stats.subscriptionMonthlyTotal, preferences.currency)}</p>
+              <p className="mt-1 text-xs text-white/60">
+                {stats.activeSubscriptions} active · {formatMoney(stats.subscriptionYearlyEstimate, preferences.currency)}/yr
               </p>
             </div>
-            <Badge tone={stats.overdueItems ? 'danger' : 'good'}>{stats.overdueItems} overdue items</Badge>
+            <Badge tone={stats.overdueItems ? 'danger' : 'good'}>{stats.overdueItems} overdue</Badge>
           </div>
         </Card>
 
         <section>
-          <SectionHeader title={`Spending — ${periodLabel[period]}`} />
+          <SectionHeader title={`Spending by category — ${periodLabel[period]}`} />
           {categories.length ? (
             <Card className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={categories} dataKey="value" nameKey="name" innerRadius={48} outerRadius={82} paddingAngle={3}>
+                  <Pie data={categories} dataKey="value" nameKey="name" innerRadius={50} outerRadius={86} paddingAngle={3}>
                     {categories.map((entry, index) => (
-                      <Cell key={entry.name} fill={colors[index % colors.length]} />
+                      <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => formatMoney(Number(value), preferences.currency)} />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="mt-[-12px] grid grid-cols-2 gap-2">
-                {categories.slice(0, 4).map((item, index) => (
-                  <div key={item.name} className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[index % colors.length] }} />
-                    <span className="truncate">{item.name}</span>
-                  </div>
-                ))}
+              <div className="mt-[-8px] grid grid-cols-2 gap-2">
+                {categories.slice(0, 4).map((item) => {
+                  const style = getExpenseCategoryStyle(item.name as ExpenseCategory);
+                  const Icon = style.icon;
+                  return (
+                    <div key={item.name} className="flex items-center gap-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+                      <span className={`grid h-6 w-6 place-items-center rounded-full ${style.bg} ${style.fg}`}>
+                        <Icon size={12} />
+                      </span>
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           ) : (
@@ -167,30 +230,25 @@ export function DashboardPage() {
         </section>
 
         <section>
-          <SectionHeader title="6-month trend" />
-          <Card className="h-52">
+          <SectionHeader title="Income vs Expense — 6 months" />
+          <Card className="h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyTrend} margin={{ top: 8, right: 4, left: -28, bottom: 0 }}>
+              <BarChart data={monthlySeries} margin={{ top: 8, right: 4, left: -28, bottom: 0 }}>
                 <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
                 <YAxis tickLine={false} axisLine={false} fontSize={11} />
                 <Tooltip formatter={(value) => formatMoney(Number(value), preferences.currency)} />
-                <Bar dataKey="amount" fill="#0f766e" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="income" fill="#10b981" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="expense" fill="#f43f5e" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </Card>
-        </section>
-
-        <section>
-          <SectionHeader title="Last 7 days" />
-          <Card className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trend} margin={{ top: 8, right: 4, left: -28, bottom: 0 }}>
-                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} />
-                <YAxis tickLine={false} axisLine={false} fontSize={11} />
-                <Tooltip formatter={(value) => formatMoney(Number(value), preferences.currency)} />
-                <Line type="monotone" dataKey="amount" stroke="#0f766e" strokeWidth={3} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="mt-2 flex justify-center gap-4 text-[0.7rem] font-semibold">
+              <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Income
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300">
+                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Expense
+              </span>
+            </div>
           </Card>
         </section>
 
@@ -205,14 +263,14 @@ export function DashboardPage() {
                   className="w-full text-left"
                   onClick={() => goToObligations(item.type === 'loan' ? 'loans' : item.type === 'item' ? 'items' : 'subscriptions')}
                 >
-                  <Card className="flex items-center justify-between gap-3 p-3 active:bg-slate-50 dark:active:bg-slate-900">
+                  <Card className="flex items-center justify-between gap-3 p-3 active:bg-zinc-50 dark:active:bg-zinc-800">
                     <div className="flex items-center gap-3">
-                      <span className="grid h-10 w-10 place-items-center rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-200">
+                      <span className="grid h-10 w-10 place-items-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-200">
                         <CalendarClock size={18} />
                       </span>
                       <div>
-                        <p className="font-bold text-slate-900 dark:text-slate-50">{item.title}</p>
-                        <p className="text-xs text-slate-500">{formatShortDate(item.dueDate)}</p>
+                        <p className="font-bold text-zinc-900 dark:text-zinc-50">{item.title}</p>
+                        <p className="text-xs text-zinc-500">{formatShortDate(item.dueDate)}</p>
                       </div>
                     </div>
                     <Badge tone={item.overdue ? 'danger' : 'warn'}>{item.overdue ? 'Overdue' : 'Due soon'}</Badge>
@@ -230,14 +288,59 @@ export function DashboardPage() {
           <div className="space-y-2">
             {activities.slice(0, 6).map((activity) => (
               <Card key={activity.id} className="p-3">
-                <p className="font-bold text-slate-900 dark:text-slate-50">{activity.title}</p>
-                <p className="text-sm text-slate-500">{activity.detail}</p>
+                <p className="font-bold text-zinc-900 dark:text-zinc-50">{activity.title}</p>
+                <p className="text-sm text-zinc-500">{activity.detail}</p>
               </Card>
             ))}
           </div>
         </section>
+
+        <p className="pt-2 text-center text-[0.7rem] font-semibold text-zinc-400">
+          Today net · {formatMoney(todayNet, preferences.currency)}
+        </p>
       </div>
     </PullToRefresh>
+  );
+}
+
+function BalanceHero({
+  currency,
+  income,
+  expense,
+  net,
+  periodLabel,
+}: {
+  currency: string;
+  income: number;
+  expense: number;
+  net: number;
+  periodLabel: string;
+}) {
+  return (
+    <Card className="gradient-balance text-white">
+      <p className="text-xs font-bold uppercase tracking-wider text-white/70">{periodLabel} · Net</p>
+      <p className="mt-1 text-4xl font-black tracking-tight tabular-nums">{formatMoney(net, currency as 'BDT')}</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="flex items-center gap-2 rounded-xl bg-white/10 p-3 backdrop-blur">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500/20 text-emerald-300">
+            <ArrowUpRight size={18} />
+          </span>
+          <div>
+            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-white/70">Income</p>
+            <p className="text-base font-black tabular-nums">{formatMoney(income, currency as 'BDT')}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-xl bg-white/10 p-3 backdrop-blur">
+          <span className="grid h-9 w-9 place-items-center rounded-full bg-rose-500/20 text-rose-300">
+            <ArrowDownRight size={18} />
+          </span>
+          <div>
+            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-white/70">Expense</p>
+            <p className="text-base font-black tabular-nums">{formatMoney(expense, currency as 'BDT')}</p>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -251,29 +354,46 @@ function SummaryCard({
   label: string;
   value: string;
   icon: React.ReactNode;
-  tone: 'teal' | 'indigo' | 'emerald' | 'amber';
+  tone: 'emerald' | 'rose' | 'indigo' | 'amber';
   onClick?: () => void;
 }) {
   const toneClass = {
-    teal: 'bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-200',
-    indigo: 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200',
-    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200',
-    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-200',
+    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200',
+    rose: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-200',
+    indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200',
+    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-200',
   }[tone];
   const inner = (
     <>
       <div className={`mb-3 grid h-9 w-9 place-items-center rounded-full ${toneClass}`}>{icon}</div>
-      <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-black text-slate-950 dark:text-slate-50">{value}</p>
-      {onClick ? <p className="mt-1 text-xs font-semibold text-slate-400">Tap to view →</p> : null}
+      <p className="text-[0.7rem] font-bold uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-1 text-lg font-black tabular-nums tracking-tight text-zinc-950 dark:text-zinc-50">{value}</p>
+      {onClick ? <p className="mt-1 text-xs font-semibold text-zinc-400">Tap to view →</p> : null}
     </>
   );
   if (onClick) {
     return (
       <button type="button" className="w-full text-left" onClick={onClick}>
-        <Card className="p-3 active:bg-slate-50 dark:active:bg-slate-900">{inner}</Card>
+        <Card className="p-3 active:bg-zinc-50 dark:active:bg-zinc-800">{inner}</Card>
       </button>
     );
   }
   return <Card className="p-3">{inner}</Card>;
+}
+
+function QuickAction({ tone, label, onClick }: { tone: 'rose' | 'emerald' | 'sky'; label: string; onClick: () => void }) {
+  const toneClass = {
+    rose: 'bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-950 dark:text-rose-200 dark:ring-rose-900',
+    emerald: 'bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-200 dark:ring-emerald-900',
+    sky: 'bg-sky-100 text-sky-700 ring-sky-200 dark:bg-sky-950 dark:text-sky-200 dark:ring-sky-900',
+  }[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-12 items-center justify-center gap-1.5 rounded-xl text-sm font-bold ring-1 active:scale-[0.98] ${toneClass}`}
+    >
+      <Plus size={16} strokeWidth={2.6} /> {label}
+    </button>
+  );
 }

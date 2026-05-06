@@ -17,9 +17,11 @@ const resetPasswordSchema = accountActionSchema.extend({
 });
 
 async function accountCounts(accountId: string) {
-  const [contacts, expenses, sharedGroups, sharedExpenses, loans, items, subscriptions] = await Promise.all([
+  const [contacts, expenses, incomes, transfers, sharedGroups, sharedExpenses, loans, items, subscriptions] = await Promise.all([
     pool.query('select count(*)::int as count from contacts where account_id=$1', [accountId]),
     pool.query('select count(*)::int as count from expenses where account_id=$1', [accountId]),
+    pool.query('select count(*)::int as count from incomes where account_id=$1', [accountId]),
+    pool.query('select count(*)::int as count from transfers where account_id=$1', [accountId]),
     pool.query('select count(*)::int as count from shared_groups where account_id=$1', [accountId]),
     pool.query('select count(*)::int as count from shared_expenses where account_id=$1', [accountId]),
     pool.query('select count(*)::int as count from loans where account_id=$1', [accountId]),
@@ -29,6 +31,8 @@ async function accountCounts(accountId: string) {
   return {
     contacts: contacts.rows[0].count,
     expenses: expenses.rows[0].count,
+    incomes: incomes.rows[0].count,
+    transfers: transfers.rows[0].count,
     sharedGroups: sharedGroups.rows[0].count,
     sharedExpenses: sharedExpenses.rows[0].count,
     loans: loans.rows[0].count,
@@ -89,6 +93,8 @@ async function clearOwnedData(accountId: string) {
     await client.query('delete from contacts where account_id=$1', [accountId]);
     await client.query('delete from shared_groups where account_id=$1', [accountId]);
     await client.query('delete from expenses where account_id=$1', [accountId]);
+    await client.query('delete from incomes where account_id=$1', [accountId]);
+    await client.query('delete from transfers where account_id=$1', [accountId]);
     await client.query('delete from loans where account_id=$1', [accountId]);
     await client.query('delete from item_records where account_id=$1', [accountId]);
     await client.query('delete from subscriptions where account_id=$1', [accountId]);
@@ -135,6 +141,8 @@ async function loadUserSnapshot(accountId: string) {
     preferences,
     contacts,
     expenses,
+    incomes,
+    transfers,
     sharedGroups,
     sharedExpenses,
     loans,
@@ -147,6 +155,8 @@ async function loadUserSnapshot(accountId: string) {
     pool.query('select * from preferences where account_id = $1 limit 1', [accountId]),
     pool.query('select * from contacts where account_id = $1 order by created_at asc', [accountId]),
     pool.query('select * from expenses where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from incomes where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from transfers where account_id = $1 order by date desc, created_at desc', [accountId]),
     pool.query('select * from shared_groups where account_id = $1 order by updated_at desc', [accountId]),
     pool.query('select * from shared_expenses where account_id = $1 order by date desc, created_at desc', [accountId]),
     pool.query('select * from loans where account_id = $1 order by updated_at desc', [accountId]),
@@ -200,6 +210,30 @@ async function loadUserSnapshot(accountId: string) {
       paymentMethod: row.payment_method,
       tags: row.tags || [],
       receiptImage: row.receipt_image || undefined,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    incomes: incomes.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      amount: numberValue(row.amount),
+      category: row.category,
+      source: row.source || '',
+      note: row.note || '',
+      date: isoDate(row.date),
+      paymentMethod: row.payment_method,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    transfers: transfers.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      amount: numberValue(row.amount),
+      fromMethod: row.from_method,
+      toMethod: row.to_method,
+      fee: numberValue(row.fee),
+      date: isoDate(row.date),
+      note: row.note || '',
       createdAt: isoDateTime(row.created_at),
       updatedAt: isoDateTime(row.updated_at),
     })),

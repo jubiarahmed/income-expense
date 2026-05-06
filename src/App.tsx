@@ -41,12 +41,12 @@ export default function App() {
 
   if (!authInitialized || shouldWaitForFinance) {
     return (
-      <main className="grid min-h-dvh place-items-center bg-slate-50 p-6 dark:bg-slate-950">
+      <main className="grid min-h-dvh place-items-center bg-zinc-50 p-6 dark:bg-zinc-950">
         <div className="text-center">
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-teal-700 text-2xl font-black text-white shadow-xl shadow-teal-900/20">
+          <div className="gradient-brand mx-auto grid h-16 w-16 place-items-center rounded-3xl text-2xl font-black text-white shadow-xl shadow-indigo-900/30">
             E
           </div>
-          <p className="mt-4 text-sm font-bold text-slate-500">Opening Expense Tracker...</p>
+          <p className="mt-4 text-sm font-bold tracking-tight text-zinc-500">Opening Expense Tracker…</p>
         </div>
       </main>
     );
@@ -62,10 +62,10 @@ export default function App() {
 
   if (financeError) {
     return (
-      <main className="grid min-h-dvh place-items-center bg-slate-50 p-6 text-slate-950">
-        <section className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <h1 className="text-xl font-black">Could not open Expense Tracker</h1>
-          <p className="mt-2 text-sm text-slate-500">{financeError}</p>
+      <main className="grid min-h-dvh place-items-center bg-zinc-50 p-6 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <h1 className="text-xl font-black tracking-tight">Could not open Expense Tracker</h1>
+          <p className="mt-2 text-sm text-zinc-500">{financeError}</p>
         </section>
       </main>
     );

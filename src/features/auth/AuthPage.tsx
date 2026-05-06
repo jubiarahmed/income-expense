@@ -48,15 +48,15 @@ export function AuthPage() {
   }
 
   return (
-    <main className="safe-top min-h-dvh bg-slate-50 px-4 py-8 text-slate-950 dark:bg-slate-950 dark:text-slate-50">
+    <main className="safe-top min-h-dvh bg-zinc-50 px-4 py-8 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <section className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-md flex-col justify-center">
         <div className="mb-8">
-          <div className="grid h-16 w-16 place-items-center rounded-3xl bg-teal-700 text-white shadow-xl shadow-teal-900/20">
+          <div className="gradient-brand grid h-16 w-16 place-items-center rounded-3xl text-white shadow-xl shadow-indigo-900/30">
             <WalletCards size={30} />
           </div>
-          <h1 className="mt-5 text-4xl font-black">Expense Tracker</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Sign in to your local account to track expenses, dues, loans, items, and recurring bills on this device.
+          <h1 className="mt-5 text-4xl font-black tracking-tight">Expense Tracker</h1>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">
+            Track income, expenses, transfers, dues, and recurring bills — all in one private space.
           </p>
         </div>
 

@@ -3,6 +3,7 @@ import { CURRENT_USER_ID } from '../domain/models';
 import type {
   Contact,
   Expense,
+  Income,
   ItemRecord,
   Loan,
   LoanPayment,
@@ -48,6 +49,18 @@ export function getExpenseTotals(expenses: Expense[]) {
     today: expenses.filter((expense) => expense.date === todayISO).reduce((sum, item) => sum + item.amount, 0),
     month: expenses
       .filter((expense) => expense.date >= range.start && expense.date <= range.end)
+      .reduce((sum, item) => sum + item.amount, 0),
+  };
+}
+
+export function getIncomeTotals(incomes: Income[]) {
+  const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
+  const range = getMonthRange(today);
+  return {
+    today: incomes.filter((income) => income.date === todayISO).reduce((sum, item) => sum + item.amount, 0),
+    month: incomes
+      .filter((income) => income.date >= range.start && income.date <= range.end)
       .reduce((sum, item) => sum + item.amount, 0),
   };
 }

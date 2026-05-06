@@ -18,21 +18,21 @@ export function BottomSheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-slate-950/45" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex items-end bg-zinc-950/55 backdrop-blur-sm" role="dialog" aria-modal="true">
       <button className="absolute inset-0 cursor-default" aria-label="Close sheet" onClick={onClose} />
       <div
         className={clsx(
-          'sheet-shadow safe-bottom relative max-h-[88dvh] w-full overflow-hidden rounded-t-3xl bg-slate-50 dark:bg-slate-950',
+          'sheet-shadow safe-bottom relative max-h-[88dvh] w-full overflow-hidden rounded-t-3xl bg-white dark:bg-zinc-950',
           className,
         )}
       >
-        <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-slate-300 dark:bg-slate-700" />
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-          <h2 className="text-lg font-bold text-slate-950 dark:text-slate-50">{title}</h2>
+        <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+        <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          <h2 className="text-lg font-bold tracking-tight text-zinc-950 dark:text-zinc-50">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-full bg-white text-slate-700 shadow-sm dark:bg-slate-900 dark:text-slate-200"
+            className="grid h-10 w-10 place-items-center rounded-full bg-zinc-100 text-zinc-700 active:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:active:bg-zinc-800"
             aria-label="Close"
           >
             <X size={20} />

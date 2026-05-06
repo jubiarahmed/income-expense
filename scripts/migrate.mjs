@@ -82,6 +82,32 @@ create table if not exists expenses (
 
 alter table expenses add column if not exists receipt_image text;
 
+create table if not exists incomes (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  amount numeric(12,2) not null,
+  category text not null,
+  source text not null default '',
+  note text not null default '',
+  date date not null,
+  payment_method text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists transfers (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  amount numeric(12,2) not null,
+  from_method text not null,
+  to_method text not null,
+  fee numeric(12,2) not null default 0,
+  date date not null,
+  note text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists shared_groups (
   id text primary key,
   account_id text not null references accounts(id) on delete cascade,
@@ -188,6 +214,8 @@ create table if not exists activity_logs (
 
 create index if not exists contacts_account_idx on contacts(account_id);
 create index if not exists expenses_account_date_idx on expenses(account_id, date desc);
+create index if not exists incomes_account_date_idx on incomes(account_id, date desc);
+create index if not exists transfers_account_date_idx on transfers(account_id, date desc);
 create index if not exists shared_groups_account_idx on shared_groups(account_id);
 create index if not exists shared_expenses_account_date_idx on shared_expenses(account_id, date desc);
 create index if not exists loans_account_idx on loans(account_id);
