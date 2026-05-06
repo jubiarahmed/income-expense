@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LockKeyhole, WalletCards } from 'lucide-react';
+import { AlertCircle, LockKeyhole, WalletCards } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Field, TextInput } from '../../components/ui/Form';
@@ -121,7 +121,16 @@ export function AuthPage() {
               </Field>
             ) : null}
 
-            {error || storeError ? <p className="rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{error || storeError}</p> : null}
+            {error || storeError ? (
+              <div
+                key={error || storeError}
+                role="alert"
+                className="shake flex items-start gap-3 rounded-xl bg-rose-50 p-3 ring-1 ring-rose-200 dark:bg-rose-950 dark:ring-rose-800"
+              >
+                <AlertCircle size={18} className="mt-0.5 shrink-0 text-rose-600 dark:text-rose-300" />
+                <p className="text-sm font-semibold leading-5 text-rose-700 dark:text-rose-200">{error || storeError}</p>
+              </div>
+            ) : null}
 
             <Button className="w-full" type="submit" disabled={loading || (mode === 'signup' && checkedCreation && !creationEnabled)} icon={<LockKeyhole size={16} />}>
               {loading ? 'Please wait...' : mode === 'signin' ? 'Sign in' : 'Create account'}
