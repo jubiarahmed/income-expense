@@ -41,6 +41,16 @@ export type ActivityEntityType =
 
 export type GoalStatus = 'active' | 'completed' | 'archived';
 
+export interface NotificationPrefs {
+  remindBeforeDays: number[];
+  remindOnDueDate: boolean;
+  remindAfterOverdue: boolean;
+  dailySummary: boolean;
+  weeklySummary: boolean;
+  budgetWarning: boolean;
+  subscriptionRenewal: boolean;
+}
+
 export interface UserPreferences {
   id: ID;
   accountId: ID;
@@ -48,6 +58,7 @@ export interface UserPreferences {
   reminderDaysBefore: number;
   notificationsEnabled: boolean;
   theme: ThemeMode;
+  notificationPrefs?: NotificationPrefs;
   seededAt?: string;
   updatedAt: string;
 }
@@ -95,10 +106,37 @@ export interface Expense {
   amount: number;
   category: ExpenseCategory;
   note: string;
+  merchant?: string;
   date: string;
   paymentMethod: PaymentMethod;
   tags: string[];
   receiptImage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SavedFilterScope = 'all' | 'expense' | 'income' | 'transfer' | 'shared';
+
+export interface SavedFilterQuery {
+  q?: string;
+  type?: SavedFilterScope;
+  categories?: string[];
+  paymentMethods?: PaymentMethod[];
+  minAmount?: number;
+  maxAmount?: number;
+  startDate?: string;
+  endDate?: string;
+  tag?: string;
+  merchant?: string;
+  hasReceipt?: boolean;
+}
+
+export interface SavedFilter {
+  id: ID;
+  accountId: ID;
+  name: string;
+  scope: SavedFilterScope;
+  query: SavedFilterQuery;
   createdAt: string;
   updatedAt: string;
 }
@@ -305,4 +343,5 @@ export interface AppDataSnapshot {
   wallets: Wallet[];
   goals: Goal[];
   goalContributions: GoalContribution[];
+  savedFilters: SavedFilter[];
 }

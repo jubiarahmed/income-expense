@@ -33,6 +33,8 @@ import { IncomeForm } from './IncomeForm';
 import { TransferForm } from './TransferForm';
 import { SharedExpenseForm } from './SharedExpenseForm';
 import { SharedGroupForm } from './SharedGroupForm';
+import { AdvancedSearchPanel } from './AdvancedSearchPanel';
+import type { SavedFilterQuery, SavedFilterScope } from '../../domain/models';
 
 type TransactionMode = 'expense' | 'income' | 'transfer' | 'shared';
 
@@ -46,17 +48,46 @@ function dateLabel(dateStr: string): string {
 
 export function TransactionsPage() {
   const reload = useFinanceStore((state) => state.reload);
+  const expenses = useFinanceStore((state) => state.expenses);
+  const incomes = useFinanceStore((state) => state.incomes);
+  const transfers = useFinanceStore((state) => state.transfers);
   const [mode, setMode] = useState<TransactionMode>('expense');
   const [search, setSearch] = useState('');
+  const [filterQuery, setFilterQuery] = useState<SavedFilterQuery>({});
+  const [filterScope, setFilterScope] = useState<SavedFilterScope>('all');
   const trimmed = search.trim();
-  const searching = trimmed.length > 0;
+  const hasStructuredFilters = Object.values(filterQuery).some(
+    (value) => value != null && !(Array.isArray(value) && value.length === 0) && value !== '',
+  );
+  const searching = trimmed.length > 0 || hasStructuredFilters || filterScope !== 'all';
+
+  function clearAll() {
+    setSearch('');
+    setFilterQuery({});
+    setFilterScope('all');
+  }
 
   return (
     <PullToRefresh onRefresh={reload}>
       <div className="space-y-5">
         <SearchBar value={search} onChange={setSearch} />
+        <AdvancedSearchPanel
+          query={filterQuery}
+          scope={filterScope}
+          expenses={expenses}
+          incomes={incomes}
+          transfers={transfers}
+          onChange={setFilterQuery}
+          onScopeChange={setFilterScope}
+          onClear={clearAll}
+        />
         {searching ? (
-          <UnifiedSearchResults query={trimmed} onClear={() => setSearch('')} />
+          <UnifiedSearchResults
+            query={trimmed}
+            filter={filterQuery}
+            scope={filterScope}
+            onClear={clearAll}
+          />
         ) : (
           <>
             <SegmentedControl
@@ -124,7 +155,17 @@ function matchesQuery(haystacks: (string | number | undefined)[], q: string) {
   });
 }
 
-function UnifiedSearchResults({ query, onClear }: { query: string; onClear: () => void }) {
+function UnifiedSearchResults({
+  query,
+  filter,
+  scope,
+  onClear,
+}: {
+  query: string;
+  filter: SavedFilterQuery;
+  scope: SavedFilterScope;
+  onClear: () => void;
+}) {
   const { expenses, incomes, transfers, preferences } = useFinanceStore();
   const pushToast = useToastStore((state) => state.push);
   const deleteExpense = useFinanceStore((state) => state.deleteExpense);
@@ -139,23 +180,73 @@ function UnifiedSearchResults({ query, onClear }: { query: string; onClear: () =
 
   const hits = useMemo<UnifiedHit[]>(() => {
     const list: UnifiedHit[] = [];
-    for (const expense of expenses) {
-      if (matchesQuery([expense.note, expense.category, expense.paymentMethod, expense.amount, expense.tags?.join(' ')], query)) {
+    const wantExpense = scope === 'all' || scope === 'expense';
+    const wantIncome = scope === 'all' || scope === 'income';
+    const wantTransfer = scope === 'all' || scope === 'transfer';
+
+    function passesAmount(amount: number) {
+      if (filter.minAmount != null && amount < filter.minAmount) return false;
+      if (filter.maxAmount != null && amount > filter.maxAmount) return false;
+      return true;
+    }
+    function passesDate(date: string) {
+      if (filter.startDate && date < filter.startDate) return false;
+      if (filter.endDate && date > filter.endDate) return false;
+      return true;
+    }
+
+    if (wantExpense) {
+      for (const expense of expenses) {
+        if (!passesAmount(expense.amount)) continue;
+        if (!passesDate(expense.date)) continue;
+        if (filter.categories?.length && !filter.categories.includes(expense.category)) continue;
+        if (filter.paymentMethods?.length && !filter.paymentMethods.includes(expense.paymentMethod)) continue;
+        if (filter.tag && !expense.tags.includes(filter.tag)) continue;
+        if (filter.merchant && expense.merchant !== filter.merchant) continue;
+        if (filter.hasReceipt === true && !expense.receiptImage) continue;
+        if (filter.hasReceipt === false && expense.receiptImage) continue;
+        if (query && !matchesQuery([expense.note, expense.merchant, expense.category, expense.paymentMethod, expense.amount, expense.tags?.join(' ')], query)) {
+          continue;
+        }
         list.push({ kind: 'expense', item: expense });
       }
     }
-    for (const income of incomes) {
-      if (matchesQuery([income.note, income.source, income.category, income.paymentMethod, income.amount], query)) {
+    if (wantIncome) {
+      for (const income of incomes) {
+        if (!passesAmount(income.amount)) continue;
+        if (!passesDate(income.date)) continue;
+        if (filter.categories?.length && !filter.categories.includes(income.category)) continue;
+        if (filter.paymentMethods?.length && !filter.paymentMethods.includes(income.paymentMethod)) continue;
+        if (filter.tag) continue; // incomes don't have tags
+        if (filter.merchant) continue; // incomes don't have merchants
+        if (filter.hasReceipt != null) continue; // incomes don't have receipts
+        if (query && !matchesQuery([income.note, income.source, income.category, income.paymentMethod, income.amount], query)) {
+          continue;
+        }
         list.push({ kind: 'income', item: income });
       }
     }
-    for (const transfer of transfers) {
-      if (matchesQuery([transfer.note, transfer.fromMethod, transfer.toMethod, transfer.amount, transfer.fee], query)) {
+    if (wantTransfer) {
+      for (const transfer of transfers) {
+        if (!passesAmount(transfer.amount)) continue;
+        if (!passesDate(transfer.date)) continue;
+        if (filter.categories?.length) continue; // transfers don't carry a category
+        if (
+          filter.paymentMethods?.length &&
+          !filter.paymentMethods.includes(transfer.fromMethod) &&
+          !filter.paymentMethods.includes(transfer.toMethod)
+        ) {
+          continue;
+        }
+        if (filter.tag || filter.merchant || filter.hasReceipt != null) continue;
+        if (query && !matchesQuery([transfer.note, transfer.fromMethod, transfer.toMethod, transfer.amount, transfer.fee], query)) {
+          continue;
+        }
         list.push({ kind: 'transfer', item: transfer });
       }
     }
     return list.sort((a, b) => b.item.date.localeCompare(a.item.date));
-  }, [expenses, incomes, transfers, query]);
+  }, [expenses, incomes, transfers, query, filter, scope]);
 
   async function handleDeleteExpense(expense: Expense) {
     const captured = {
@@ -213,12 +304,30 @@ function UnifiedSearchResults({ query, onClear }: { query: string; onClear: () =
     }
   }
 
+  const totalAmount = useMemo(() => {
+    let total = 0;
+    for (const hit of hits) {
+      if (hit.kind === 'expense') total -= hit.item.amount;
+      else if (hit.kind === 'income') total += hit.item.amount;
+    }
+    return total;
+  }, [hits]);
+
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-bold tracking-tight text-zinc-700 dark:text-zinc-200">
-          {hits.length} result{hits.length === 1 ? '' : 's'} for "{query}"
-        </p>
+        <div>
+          <p className="text-sm font-bold tracking-tight text-zinc-700 dark:text-zinc-200">
+            {hits.length} result{hits.length === 1 ? '' : 's'}
+            {query ? ` for "${query}"` : ''}
+          </p>
+          {hits.length ? (
+            <p className="text-xs text-zinc-500">
+              Net {totalAmount < 0 ? '−' : '+'}
+              {formatMoney(Math.abs(totalAmount), preferences.currency)} (excluding transfers)
+            </p>
+          ) : null}
+        </div>
         <Button variant="ghost" className="min-h-9 px-3" onClick={onClear}>
           Clear
         </Button>

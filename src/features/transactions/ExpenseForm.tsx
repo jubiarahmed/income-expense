@@ -24,6 +24,7 @@ export function ExpenseForm({
   const [amount, setAmount] = useState(expense?.amount.toString() ?? '');
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? initialCategory ?? 'Food');
   const [note, setNote] = useState(expense?.note ?? '');
+  const [merchant, setMerchant] = useState(expense?.merchant ?? '');
   const [date, setDate] = useState(expense?.date ?? todayISO());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(expense?.paymentMethod ?? 'Cash');
   const [tags, setTags] = useState(expense?.tags.join(', ') ?? '');
@@ -44,6 +45,13 @@ export function ExpenseForm({
     if (category && !list.includes(category)) list.push(category);
     return list;
   }, [expenses, category]);
+  const merchantOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of expenses) {
+      if (item.merchant) set.add(item.merchant);
+    }
+    return [...set].sort();
+  }, [expenses]);
 
   function commitCustomCategory() {
     const next = customDraft.trim();
@@ -74,7 +82,7 @@ export function ExpenseForm({
     setSaving(true);
     setError('');
     try {
-      const input = { amount: Number(amount), category, note, date, paymentMethod, tags, receiptImage };
+      const input = { amount: Number(amount), category, note, merchant: merchant.trim() || undefined, date, paymentMethod, tags, receiptImage };
       if (expense) {
         await updateExpense(expense.id, input);
       } else {
@@ -156,6 +164,21 @@ export function ExpenseForm({
           <p className="text-xs text-zinc-500">Recent: {recentCategories.join(', ')}</p>
         ) : null}
       </div>
+
+      <Field label="Merchant / Payee (optional)">
+        <TextInput
+          list="merchant-suggestions"
+          value={merchant}
+          onChange={(event) => setMerchant(event.target.value)}
+          placeholder="KFC, Pathao, Daraz, Agora..."
+          maxLength={40}
+        />
+        <datalist id="merchant-suggestions">
+          {merchantOptions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+      </Field>
 
       <Field label="Note">
         <TextArea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Lunch, bus fare, recharge…" />

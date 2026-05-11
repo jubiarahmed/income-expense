@@ -355,18 +355,18 @@ export function getPaymentMethodUsage(expenses: Expense[], reference = new Date(
 export function getTopMerchants(expenses: Expense[], reference = new Date(), top = 5) {
   const monthStart = format(startOfMonth(reference), 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(reference), 'yyyy-MM-dd');
-  const counts = new Map<string, { count: number; total: number; category: string }>();
+  const counts = new Map<string, { display: string; count: number; total: number; category: string }>();
   for (const expense of expenses) {
     if (expense.date < monthStart || expense.date > monthEnd) continue;
-    const merchant = expense.note?.trim() || expense.category;
+    const merchant = (expense.merchant?.trim() || expense.note?.trim() || expense.category).trim();
     const key = merchant.toLowerCase();
-    const entry = counts.get(key) ?? { count: 0, total: 0, category: expense.category };
+    const entry = counts.get(key) ?? { display: merchant, count: 0, total: 0, category: expense.category };
     entry.count += 1;
     entry.total += expense.amount;
     counts.set(key, entry);
   }
   return [...counts.entries()]
-    .map(([key, value]) => ({ merchant: key, ...value, total: roundMoney(value.total) }))
+    .map(([key, value]) => ({ merchant: value.display || key, count: value.count, total: roundMoney(value.total), category: value.category }))
     .sort((a, b) => b.total - a.total)
     .slice(0, top);
 }

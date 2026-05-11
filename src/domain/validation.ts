@@ -17,6 +17,7 @@ export const expenseSchema = z.object({
   amount: moneySchema,
   category: categorySchema,
   note: z.string().trim().optional().default(''),
+  merchant: z.string().trim().max(40).optional(),
   date: dateSchema,
   paymentMethod: z.enum(PAYMENT_METHODS),
   tags: z.string().optional().default(''),
@@ -103,11 +104,44 @@ export const subscriptionSchema = z.object({
   status: z.enum(['active', 'paused', 'cancelled']).optional().default('active'),
 });
 
+export const notificationPrefsSchema = z.object({
+  remindBeforeDays: z.array(z.coerce.number().int().min(0).max(30)).optional().default([1, 3]),
+  remindOnDueDate: z.boolean().optional().default(true),
+  remindAfterOverdue: z.boolean().optional().default(true),
+  dailySummary: z.boolean().optional().default(false),
+  weeklySummary: z.boolean().optional().default(true),
+  budgetWarning: z.boolean().optional().default(true),
+  subscriptionRenewal: z.boolean().optional().default(true),
+});
+
 export const preferencesSchema = z.object({
   currency: z.enum(['BDT', 'USD', 'EUR', 'INR', 'GBP']),
   reminderDaysBefore: z.coerce.number().int().min(0).max(30),
   notificationsEnabled: z.boolean(),
   theme: z.enum(['light', 'dark', 'system']),
+  notificationPrefs: notificationPrefsSchema.optional(),
+});
+
+export const savedFilterScopeSchema = z.enum(['all', 'expense', 'income', 'transfer', 'shared']);
+
+export const savedFilterQuerySchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  type: savedFilterScopeSchema.optional(),
+  categories: z.array(z.string().trim().max(40)).optional(),
+  paymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional(),
+  minAmount: z.coerce.number().nonnegative().optional(),
+  maxAmount: z.coerce.number().nonnegative().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  tag: z.string().trim().max(40).optional(),
+  merchant: z.string().trim().max(40).optional(),
+  hasReceipt: z.boolean().optional(),
+});
+
+export const savedFilterSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(60),
+  scope: savedFilterScopeSchema,
+  query: savedFilterQuerySchema,
 });
 
 export const signUpSchema = z
@@ -169,7 +203,16 @@ export type SubscriptionInput = z.infer<typeof subscriptionSchema>;
 export type PreferencesInput = z.infer<typeof preferencesSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
+export const tagRenameSchema = z.object({
+  from: z.string().trim().min(1).max(40),
+  to: z.string().trim().min(1).max(40),
+});
+
 export type BudgetInput = z.infer<typeof budgetSchema>;
+export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
+export type SavedFilterInput = z.infer<typeof savedFilterSchema>;
+export type SavedFilterQueryInput = z.infer<typeof savedFilterQuerySchema>;
+export type TagRenameInput = z.infer<typeof tagRenameSchema>;
 export type WalletInput = z.infer<typeof walletSchema>;
 export type GoalInput = z.infer<typeof goalSchema>;
 export type GoalContributionInput = z.infer<typeof goalContributionSchema>;

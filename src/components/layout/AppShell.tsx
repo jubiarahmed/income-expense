@@ -25,6 +25,8 @@ const titles: Record<string, string> = {
   '/wallets': 'Wallets',
   '/goals': 'Goals',
   '/reports': 'Reports',
+  '/calendar': 'Calendar',
+  '/tags': 'Tags',
   '/settings': 'Settings',
   '/admin': 'Superadmin',
 };

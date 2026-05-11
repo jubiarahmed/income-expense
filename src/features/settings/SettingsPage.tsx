@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, BellRing, Download, LogOut, Monitor, Moon, Shield, Smartphone, Sun } from 'lucide-react';
+import { Bell, BellRing, Download, LogOut, Monitor, Moon, Shield, Smartphone, Sun, Tag as TagIcon } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { Field, SelectInput } from '../../components/ui/Form';
+import type { NotificationPrefs } from '../../domain/models';
+import { clsx } from 'clsx';
 import { APP_VERSION, CURRENCIES } from '../../domain/constants';
 import type { CurrencyCode, ThemeMode } from '../../domain/models';
 import { useAuthStore } from '../../state/useAuthStore';
@@ -24,6 +26,23 @@ export function SettingsPage() {
   const [theme, setTheme] = useState<ThemeMode>(preferences.theme);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const defaultNotificationPrefs = useMemo<NotificationPrefs>(
+    () =>
+      preferences.notificationPrefs ?? {
+        remindBeforeDays: [1, 3],
+        remindOnDueDate: true,
+        remindAfterOverdue: true,
+        dailySummary: false,
+        weeklySummary: true,
+        budgetWarning: true,
+        subscriptionRenewal: true,
+      },
+    [preferences.notificationPrefs],
+  );
+  const [notifyPrefs, setNotifyPrefs] = useState<NotificationPrefs>(defaultNotificationPrefs);
+  useEffect(() => {
+    setNotifyPrefs(defaultNotificationPrefs);
+  }, [defaultNotificationPrefs]);
   const standalone = window.matchMedia('(display-mode: standalone)').matches;
 
   useEffect(() => {
@@ -41,6 +60,7 @@ export function SettingsPage() {
         reminderDaysBefore: preferences.reminderDaysBefore || 2,
         theme,
         notificationsEnabled: preferences.notificationsEnabled,
+        notificationPrefs: notifyPrefs,
       });
       setMessage('Settings saved.');
     } catch (error) {
@@ -60,6 +80,7 @@ export function SettingsPage() {
         reminderDaysBefore: preferences.reminderDaysBefore || 2,
         notificationsEnabled: preferences.notificationsEnabled,
         theme: nextTheme,
+        notificationPrefs: notifyPrefs,
       });
       setMessage('Theme saved.');
     } catch (error) {
@@ -191,6 +212,86 @@ export function SettingsPage() {
         </Button>
       </Card>
 
+      <Card className="space-y-4">
+        <SectionHeader title="Notification preferences" />
+        <p className="text-xs text-zinc-500">
+          Choose when in-app and browser reminders should appear. Saving updates the dashboard's smart-insights
+          and the Reminders page.
+        </p>
+
+        <div className="space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">Remind me before due</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[1, 3, 7, 14].map((days) => {
+              const active = notifyPrefs.remindBeforeDays.includes(days);
+              return (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() =>
+                    setNotifyPrefs((current) => ({
+                      ...current,
+                      remindBeforeDays: active
+                        ? current.remindBeforeDays.filter((d) => d !== days)
+                        : [...current.remindBeforeDays, days].sort((a, b) => a - b),
+                    }))
+                  }
+                  className={clsx(
+                    'min-h-10 rounded-full border px-3 text-xs font-bold transition',
+                    active
+                      ? 'border-indigo-600 bg-indigo-600 text-white'
+                      : 'border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300',
+                  )}
+                >
+                  {days}d
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <PrefToggle
+          label="Remind on due date"
+          enabled={notifyPrefs.remindOnDueDate}
+          onChange={(v) => setNotifyPrefs((c) => ({ ...c, remindOnDueDate: v }))}
+        />
+        <PrefToggle
+          label="Remind after overdue"
+          enabled={notifyPrefs.remindAfterOverdue}
+          onChange={(v) => setNotifyPrefs((c) => ({ ...c, remindAfterOverdue: v }))}
+        />
+        <PrefToggle
+          label="Daily summary"
+          enabled={notifyPrefs.dailySummary}
+          onChange={(v) => setNotifyPrefs((c) => ({ ...c, dailySummary: v }))}
+        />
+        <PrefToggle
+          label="Weekly summary"
+          enabled={notifyPrefs.weeklySummary}
+          onChange={(v) => setNotifyPrefs((c) => ({ ...c, weeklySummary: v }))}
+        />
+        <PrefToggle
+          label="Budget warning"
+          enabled={notifyPrefs.budgetWarning}
+          onChange={(v) => setNotifyPrefs((c) => ({ ...c, budgetWarning: v }))}
+        />
+        <PrefToggle
+          label="Subscription renewal"
+          enabled={notifyPrefs.subscriptionRenewal}
+          onChange={(v) => setNotifyPrefs((c) => ({ ...c, subscriptionRenewal: v }))}
+        />
+      </Card>
+
+      <Card className="space-y-3">
+        <SectionHeader title="Tags" />
+        <p className="text-sm leading-6 text-zinc-500">
+          Manage every tag you've used on expenses — rename, merge, or remove them.
+        </p>
+        <Button variant="secondary" className="w-full" icon={<TagIcon size={16} />} onClick={() => navigate('/tags')}>
+          Open Tag manager
+        </Button>
+      </Card>
+
       <Card className="space-y-3">
         <SectionHeader title="Install App" />
         <div className="flex items-center gap-3">
@@ -212,5 +313,31 @@ export function SettingsPage() {
         {message ? <p className="text-sm font-semibold text-teal-700 dark:text-teal-300">{message}</p> : null}
       </Card>
     </div>
+  );
+}
+
+function PrefToggle({ label, enabled, onChange }: { label: string; enabled: boolean; onChange: (next: boolean) => void }) {
+  return (
+    <label className="flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl bg-zinc-50 px-3 dark:bg-zinc-800/60">
+      <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        onClick={() => onChange(!enabled)}
+        className={clsx(
+          'relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors',
+          enabled ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-700',
+        )}
+      >
+        <span
+          className={clsx(
+            'inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-5' : 'translate-x-0.5',
+          )}
+          style={{ marginTop: '2px' }}
+        />
+      </button>
+    </label>
   );
 }

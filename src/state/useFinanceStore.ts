@@ -17,9 +17,11 @@ import type {
   LoanInput,
   LoanPaymentInput,
   PreferencesInput,
+  SavedFilterInput,
   SharedExpenseInput,
   SharedGroupInput,
   SubscriptionInput,
+  TagRenameInput,
   TransferInput,
   WalletInput,
 } from '../domain/validation';
@@ -54,6 +56,7 @@ function emptySnapshot(): AppDataSnapshot {
     wallets: [],
     goals: [],
     goalContributions: [],
+    savedFilters: [],
   };
 }
 
@@ -130,6 +133,11 @@ interface FinanceState extends AppDataSnapshot {
   deleteGoal: (id: ID) => Promise<void>;
   contributeToGoal: (input: GoalContributionInput) => Promise<void>;
   deleteGoalContribution: (id: ID) => Promise<void>;
+  addSavedFilter: (input: SavedFilterInput) => Promise<void>;
+  updateSavedFilter: (id: ID, input: SavedFilterInput) => Promise<void>;
+  deleteSavedFilter: (id: ID) => Promise<void>;
+  renameTag: (input: TagRenameInput) => Promise<void>;
+  deleteTag: (tag: string) => Promise<void>;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => {
@@ -229,5 +237,11 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     deleteGoal: async (id) => run('deleteGoal', { id }),
     contributeToGoal: async (input) => run('contributeToGoal', input),
     deleteGoalContribution: async (id) => run('deleteGoalContribution', { id }),
+
+    addSavedFilter: async (input) => run('addSavedFilter', input),
+    updateSavedFilter: async (id, input) => run('updateSavedFilter', { id, input }),
+    deleteSavedFilter: async (id) => run('deleteSavedFilter', { id }),
+    renameTag: async (input) => run('renameTag', input),
+    deleteTag: async (tag) => run('deleteTag', { tag }),
   };
 });

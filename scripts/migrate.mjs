@@ -81,6 +81,18 @@ create table if not exists expenses (
 );
 
 alter table expenses add column if not exists receipt_image text;
+alter table expenses add column if not exists merchant text;
+alter table preferences add column if not exists notification_prefs jsonb not null default '{}'::jsonb;
+
+create table if not exists saved_filters (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  name text not null,
+  scope text not null check (scope in ('all','expense','income','transfer','shared')),
+  query jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
 create table if not exists incomes (
   id text primary key,
@@ -274,6 +286,7 @@ create index if not exists budgets_account_idx on budgets(account_id);
 create index if not exists wallets_account_idx on wallets(account_id);
 create index if not exists goals_account_idx on goals(account_id);
 create index if not exists goal_contributions_account_idx on goal_contributions(account_id, date desc);
+create index if not exists saved_filters_account_idx on saved_filters(account_id);
 `;
 
 await pool.query(sql);

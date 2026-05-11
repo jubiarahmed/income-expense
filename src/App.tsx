@@ -6,6 +6,7 @@ import { Toaster } from './components/ui/Toaster';
 import { AdminPage } from './features/admin/AdminPage';
 import { AuthPage } from './features/auth/AuthPage';
 import { BudgetsPage } from './features/budgets/BudgetsPage';
+import { CalendarPage } from './features/calendar/CalendarPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { GoalsPage } from './features/goals/GoalsPage';
 import { ObligationsPage } from './features/obligations/ObligationsPage';
@@ -13,6 +14,7 @@ import { PeoplePage } from './features/people/PeoplePage';
 import { RemindersPage } from './features/reminders/RemindersPage';
 import { ReportsPage } from './features/reports/ReportsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
+import { TagsPage } from './features/tags/TagsPage';
 import { TransactionsPage } from './features/transactions/TransactionsPage';
 import { WalletsPage } from './features/wallets/WalletsPage';
 import { useAuthStore } from './state/useAuthStore';
@@ -89,6 +91,8 @@ export default function App() {
           <Route path="wallets" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <WalletsPage />} />
           <Route path="goals" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <GoalsPage />} />
           <Route path="reports" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <ReportsPage />} />
+          <Route path="calendar" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <CalendarPage />} />
+          <Route path="tags" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <TagsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="admin" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <Navigate to="/" replace />} />
         </Route>

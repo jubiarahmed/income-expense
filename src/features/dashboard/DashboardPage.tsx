@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarClock, ChevronRight, Flag, Plus, Sparkles, Target, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar as CalendarIcon, CalendarClock, ChevronRight, Flag, Plus, Sparkles, Tag, Target, Wallet } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -201,11 +201,13 @@ export function DashboardPage() {
           liquidBalance={liquidBalance}
         />
 
-        <section className="grid grid-cols-4 gap-2">
+        <section className="grid grid-cols-3 gap-2">
           <LaunchpadTile label="Wallets" tone="emerald" icon={<Wallet size={20} />} onClick={() => navigate('/wallets')} subtitle={formatMoney(liquidBalance, preferences.currency)} />
           <LaunchpadTile label="Budgets" tone="indigo" icon={<Target size={20} />} onClick={() => navigate('/budgets')} subtitle={`${activeBudgets} set`} />
           <LaunchpadTile label="Goals" tone="pink" icon={<Flag size={20} />} onClick={() => navigate('/goals')} subtitle={`${activeGoals} active`} />
           <LaunchpadTile label="Reports" tone="violet" icon={<BarChart3 size={20} />} onClick={() => navigate('/reports')} subtitle="Analyze" />
+          <LaunchpadTile label="Calendar" tone="amber" icon={<CalendarIcon size={20} />} onClick={() => navigate('/calendar')} subtitle="Monthly view" />
+          <LaunchpadTile label="Tags" tone="fuchsia" icon={<Tag size={20} />} onClick={() => navigate('/tags')} subtitle="Manage" />
         </section>
 
         {insights.length ? (
@@ -510,7 +512,7 @@ function LaunchpadTile({
   label: string;
   subtitle?: string;
   icon: React.ReactNode;
-  tone: 'emerald' | 'indigo' | 'pink' | 'violet';
+  tone: 'emerald' | 'indigo' | 'pink' | 'violet' | 'amber' | 'fuchsia';
   onClick: () => void;
 }) {
   const toneClass = {
@@ -518,6 +520,8 @@ function LaunchpadTile({
     indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200',
     pink: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-200',
     violet: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-200',
+    amber: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-200',
+    fuchsia: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-200',
   }[tone];
   return (
     <button

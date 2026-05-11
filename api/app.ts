@@ -10,9 +10,11 @@ import {
   loanPaymentSchema,
   loanSchema,
   preferencesSchema,
+  savedFilterSchema,
   sharedExpenseSchema,
   sharedGroupSchema,
   subscriptionSchema,
+  tagRenameSchema,
   transferSchema,
   walletSchema,
 } from '../src/domain/validation.js';
@@ -63,6 +65,7 @@ async function readSnapshot(accountId: string) {
     wallets,
     goals,
     goalContributions,
+    savedFilters,
   ] = await Promise.all([
     pool.query('select * from preferences where account_id = $1 limit 1', [accountId]),
     pool.query('select * from contacts where account_id = $1 order by name asc', [accountId]),
@@ -81,6 +84,7 @@ async function readSnapshot(accountId: string) {
     pool.query('select * from wallets where account_id = $1 order by created_at asc', [accountId]),
     pool.query('select * from goals where account_id = $1 order by created_at desc', [accountId]),
     pool.query('select * from goal_contributions where account_id = $1 order by date desc, created_at desc', [accountId]),
+    pool.query('select * from saved_filters where account_id = $1 order by created_at asc', [accountId]),
   ]);
 
   const pref = preferences.rows[0];
@@ -92,6 +96,7 @@ async function readSnapshot(accountId: string) {
       reminderDaysBefore: pref.reminder_days_before,
       notificationsEnabled: pref.notifications_enabled,
       theme: pref.theme,
+      notificationPrefs: pref.notification_prefs && Object.keys(pref.notification_prefs).length ? pref.notification_prefs : undefined,
       seededAt: pref.seeded_at ? isoDateTime(pref.seeded_at) : undefined,
       updatedAt: isoDateTime(pref.updated_at),
     },
@@ -110,6 +115,7 @@ async function readSnapshot(accountId: string) {
       amount: numberValue(row.amount),
       category: row.category,
       note: row.note,
+      merchant: row.merchant || undefined,
       date: isoDate(row.date),
       paymentMethod: row.payment_method,
       tags: row.tags || [],
@@ -277,6 +283,15 @@ async function readSnapshot(accountId: string) {
       note: row.note || '',
       createdAt: isoDateTime(row.created_at),
     })),
+    savedFilters: savedFilters.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      name: row.name,
+      scope: row.scope,
+      query: row.query || {},
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
   };
 }
 
@@ -365,18 +380,18 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const id = action === 'addExpense' ? makeId('expense') : payload.id;
       if (action === 'addExpense') {
         await pool.query(
-          `insert into expenses (id, account_id, amount, category, note, date, payment_method, tags, receipt_image, created_at, updated_at)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
-          [id, account.id, input.amount, input.category, input.note, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null],
+          `insert into expenses (id, account_id, amount, category, note, merchant, date, payment_method, tags, receipt_image, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,now(),now())`,
+          [id, account.id, input.amount, input.category, input.note, input.merchant || null, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null],
         );
-        await activity(account.id, 'expense', id, `Spent ${input.amount} on ${input.category}`, input.note || input.paymentMethod, input.amount);
+        await activity(account.id, 'expense', id, `Spent ${input.amount} on ${input.category}`, input.merchant || input.note || input.paymentMethod, input.amount);
       } else {
         await pool.query(
-          `update expenses set amount=$1, category=$2, note=$3, date=$4, payment_method=$5, tags=$6, receipt_image=$7, updated_at=now()
-           where id=$8 and account_id=$9`,
-          [input.amount, input.category, input.note, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null, id, account.id],
+          `update expenses set amount=$1, category=$2, note=$3, merchant=$4, date=$5, payment_method=$6, tags=$7, receipt_image=$8, updated_at=now()
+           where id=$9 and account_id=$10`,
+          [input.amount, input.category, input.note, input.merchant || null, input.date, input.paymentMethod, JSON.stringify(parseTags(input.tags)), input.receiptImage || null, id, account.id],
         );
-        await activity(account.id, 'expense', id, `Updated ${input.category} expense`, input.note || input.paymentMethod, input.amount);
+        await activity(account.id, 'expense', id, `Updated ${input.category} expense`, input.merchant || input.note || input.paymentMethod, input.amount);
       }
       return ok(response);
     }
@@ -397,11 +412,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const row = existing.rows[0];
       const id = makeId('expense');
       await pool.query(
-        `insert into expenses (id, account_id, amount, category, note, date, payment_method, tags, receipt_image, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,current_date,$6,$7,$8,now(),now())`,
-        [id, account.id, row.amount, row.category, row.note, row.payment_method, JSON.stringify(row.tags || []), row.receipt_image || null],
+        `insert into expenses (id, account_id, amount, category, note, merchant, date, payment_method, tags, receipt_image, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,current_date,$7,$8,$9,now(),now())`,
+        [id, account.id, row.amount, row.category, row.note, row.merchant || null, row.payment_method, JSON.stringify(row.tags || []), row.receipt_image || null],
       );
-      await activity(account.id, 'expense', id, `Duplicated ${row.category} expense`, row.note || 'Repeat expense logged for today.', numberValue(row.amount));
+      await activity(account.id, 'expense', id, `Duplicated ${row.category} expense`, row.merchant || row.note || 'Repeat expense logged for today.', numberValue(row.amount));
       return ok(response);
     }
 
@@ -747,9 +762,16 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const input = preferencesSchema.parse(payload);
       await ensurePreferences(account.id);
       await pool.query(
-        `update preferences set currency=$1, reminder_days_before=$2, notifications_enabled=$3, theme=$4, updated_at=now()
-         where account_id=$5`,
-        [input.currency, input.reminderDaysBefore, input.notificationsEnabled, input.theme, account.id],
+        `update preferences set currency=$1, reminder_days_before=$2, notifications_enabled=$3, theme=$4, notification_prefs=$5, updated_at=now()
+         where account_id=$6`,
+        [
+          input.currency,
+          input.reminderDaysBefore,
+          input.notificationsEnabled,
+          input.theme,
+          JSON.stringify(input.notificationPrefs || {}),
+          account.id,
+        ],
       );
       await activity(account.id, 'settings', account.id, 'Preferences updated', `${input.currency} · ${input.theme} theme · reminders ${input.reminderDaysBefore}d`);
       return ok(response);
@@ -889,6 +911,60 @@ export default async function handler(request: VercelRequest, response: VercelRe
         );
         await activity(account.id, 'goalContribution', payload.id, 'Reverted goal contribution', 'Contribution removed.', numberValue(row.amount));
       }
+      return ok(response);
+    }
+
+    if (action === 'addSavedFilter' || action === 'updateSavedFilter') {
+      const input = savedFilterSchema.parse(action === 'addSavedFilter' ? payload : payload.input);
+      const id = action === 'addSavedFilter' ? makeId('savedfilter') : payload.id;
+      if (action === 'addSavedFilter') {
+        await pool.query(
+          `insert into saved_filters (id, account_id, name, scope, query, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,now(),now())`,
+          [id, account.id, input.name, input.scope, JSON.stringify(input.query)],
+        );
+      } else {
+        await pool.query(
+          `update saved_filters set name=$1, scope=$2, query=$3, updated_at=now() where id=$4 and account_id=$5`,
+          [input.name, input.scope, JSON.stringify(input.query), id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteSavedFilter') {
+      await pool.query('delete from saved_filters where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'renameTag') {
+      const input = tagRenameSchema.parse(payload);
+      // Replace `from` with `to` everywhere; dedupe so renaming into an existing tag collapses to one entry.
+      await pool.query(
+        `update expenses
+         set tags = (
+           select coalesce(jsonb_agg(distinct case when v = $1 then $2 else v end), '[]'::jsonb)
+           from jsonb_array_elements_text(tags) as v
+         ),
+         updated_at = now()
+         where account_id = $3 and tags ? $1`,
+        [input.from, input.to, account.id],
+      );
+      await activity(account.id, 'settings', account.id, `Renamed tag ${input.from} → ${input.to}`, 'Tag renamed across all expenses.');
+      return ok(response);
+    }
+
+    if (action === 'deleteTag') {
+      const tag = String(payload.tag || '');
+      if (!tag) return fail(response, 400, 'Tag is required.');
+      await pool.query(
+        `update expenses
+         set tags = coalesce((select jsonb_agg(v) from jsonb_array_elements_text(tags) as v where v <> $1), '[]'::jsonb),
+         updated_at = now()
+         where account_id = $2 and tags ? $1`,
+        [tag, account.id],
+      );
+      await activity(account.id, 'settings', account.id, `Removed tag ${tag}`, 'Tag deleted from all expenses.');
       return ok(response);
     }
 
