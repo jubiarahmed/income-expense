@@ -5,12 +5,16 @@ import { AppShell } from './components/layout/AppShell';
 import { Toaster } from './components/ui/Toaster';
 import { AdminPage } from './features/admin/AdminPage';
 import { AuthPage } from './features/auth/AuthPage';
+import { BudgetsPage } from './features/budgets/BudgetsPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
+import { GoalsPage } from './features/goals/GoalsPage';
 import { ObligationsPage } from './features/obligations/ObligationsPage';
 import { PeoplePage } from './features/people/PeoplePage';
 import { RemindersPage } from './features/reminders/RemindersPage';
+import { ReportsPage } from './features/reports/ReportsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { TransactionsPage } from './features/transactions/TransactionsPage';
+import { WalletsPage } from './features/wallets/WalletsPage';
 import { useAuthStore } from './state/useAuthStore';
 import { useFinanceStore } from './state/useFinanceStore';
 
@@ -81,6 +85,10 @@ export default function App() {
           <Route path="people" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <PeoplePage />} />
           <Route path="obligations" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <ObligationsPage />} />
           <Route path="reminders" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <RemindersPage />} />
+          <Route path="budgets" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <BudgetsPage />} />
+          <Route path="wallets" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <WalletsPage />} />
+          <Route path="goals" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <GoalsPage />} />
+          <Route path="reports" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <ReportsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="admin" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <Navigate to="/" replace />} />
         </Route>

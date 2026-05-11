@@ -33,7 +33,13 @@ export type ActivityEntityType =
   | 'item'
   | 'subscription'
   | 'contact'
+  | 'budget'
+  | 'wallet'
+  | 'goal'
+  | 'goalContribution'
   | 'settings';
+
+export type GoalStatus = 'active' | 'completed' | 'archived';
 
 export interface UserPreferences {
   id: ID;
@@ -237,6 +243,50 @@ export interface ActivityLog {
   createdAt: string;
 }
 
+export interface Budget {
+  id: ID;
+  accountId: ID;
+  category: string;
+  monthlyLimit: number;
+  notifyAt: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Wallet {
+  id: ID;
+  accountId: ID;
+  method: PaymentMethod;
+  name: string;
+  openingBalance: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Goal {
+  id: ID;
+  accountId: ID;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  walletMethod?: PaymentMethod;
+  deadline?: string;
+  notes: string;
+  status: GoalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GoalContribution {
+  id: ID;
+  accountId: ID;
+  goalId: ID;
+  amount: number;
+  date: string;
+  note: string;
+  createdAt: string;
+}
+
 export interface AppDataSnapshot {
   preferences: UserPreferences;
   contacts: Contact[];
@@ -251,4 +301,8 @@ export interface AppDataSnapshot {
   subscriptions: Subscription[];
   reminders: Reminder[];
   activities: ActivityLog[];
+  budgets: Budget[];
+  wallets: Wallet[];
+  goals: Goal[];
+  goalContributions: GoalContribution[];
 }

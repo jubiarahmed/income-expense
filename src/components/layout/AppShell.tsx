@@ -21,6 +21,10 @@ const titles: Record<string, string> = {
   '/people': 'People',
   '/obligations': 'Obligations',
   '/reminders': 'Reminders',
+  '/budgets': 'Budgets',
+  '/wallets': 'Wallets',
+  '/goals': 'Goals',
+  '/reports': 'Reports',
   '/settings': 'Settings',
   '/admin': 'Superadmin',
 };

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, ChevronRight, Plus } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarClock, ChevronRight, Flag, Plus, Sparkles, Target, Wallet } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -15,6 +15,7 @@ import {
   getObligationStats,
   getUpcomingObligations,
 } from '../../lib/calculations';
+import { getSmartInsights, getTotalLiquidBalance, getWalletBalances } from '../../lib/moneyAnalytics';
 import { formatRelativeDateTime, formatShortDate, getMonthRange } from '../../lib/date';
 import { formatMoney, roundMoney } from '../../lib/money';
 import { useFinanceStore } from '../../state/useFinanceStore';
@@ -98,12 +99,16 @@ export function DashboardPage() {
     contacts,
     expenses,
     incomes,
+    transfers,
     loans,
     loanPayments,
     sharedExpenses,
     items,
     subscriptions,
     activities,
+    budgets,
+    wallets,
+    goals,
   } = useFinanceStore();
   const reload = useFinanceStore((state) => state.reload);
   const openAddFlow = useUiStore((state) => state.openAddFlow);
@@ -138,6 +143,17 @@ export function DashboardPage() {
   const monthlySeries = useMemo(() => getLast6MonthSeries(expenses, incomes), [expenses, incomes]);
   const upcoming = getUpcomingObligations(loans, loanPayments, items, subscriptions).slice(0, 6);
   const todayNet = roundMoney(incomeTotals.today - totals.today);
+  const walletBalances = useMemo(
+    () => getWalletBalances(wallets, expenses, incomes, transfers),
+    [wallets, expenses, incomes, transfers],
+  );
+  const liquidBalance = getTotalLiquidBalance(walletBalances);
+  const insights = useMemo(
+    () => getSmartInsights(expenses, incomes, budgets, walletBalances),
+    [expenses, incomes, budgets, walletBalances],
+  );
+  const activeGoals = goals.filter((goal) => goal.status === 'active').length;
+  const activeBudgets = budgets.length;
 
   function goToObligations(mode: ObligationMode) {
     navigate('/obligations', { state: { mode } });
@@ -182,7 +198,53 @@ export function DashboardPage() {
               ? format(parseISO(`${allTimeMonth}-01`), 'MMMM yyyy')
               : periodLabel[period]
           }
+          liquidBalance={liquidBalance}
         />
+
+        <section className="grid grid-cols-4 gap-2">
+          <LaunchpadTile label="Wallets" tone="emerald" icon={<Wallet size={20} />} onClick={() => navigate('/wallets')} subtitle={formatMoney(liquidBalance, preferences.currency)} />
+          <LaunchpadTile label="Budgets" tone="indigo" icon={<Target size={20} />} onClick={() => navigate('/budgets')} subtitle={`${activeBudgets} set`} />
+          <LaunchpadTile label="Goals" tone="pink" icon={<Flag size={20} />} onClick={() => navigate('/goals')} subtitle={`${activeGoals} active`} />
+          <LaunchpadTile label="Reports" tone="violet" icon={<BarChart3 size={20} />} onClick={() => navigate('/reports')} subtitle="Analyze" />
+        </section>
+
+        {insights.length ? (
+          <section>
+            <SectionHeader title="Smart insights" />
+            <div className="space-y-2">
+              {insights.slice(0, 3).map((insight) => {
+                const tone =
+                  insight.tone === 'warning'
+                    ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-200'
+                    : insight.tone === 'positive'
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200'
+                      : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200';
+                return (
+                  <Card key={insight.id} className="p-3">
+                    <div className="flex items-start gap-3">
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`}>
+                        <Sparkles size={16} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold tracking-tight text-zinc-950 dark:text-zinc-50">{insight.title}</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">{insight.detail}</p>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+              {insights.length > 3 ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/reports')}
+                  className="w-full rounded-xl bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-700 active:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200"
+                >
+                  See {insights.length - 3} more insights in Reports →
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         <section className="grid grid-cols-2 gap-3">
           <SummaryCard
@@ -357,16 +419,25 @@ function BalanceHero({
   expense,
   net,
   periodLabel,
+  liquidBalance,
 }: {
   currency: string;
   income: number;
   expense: number;
   net: number;
   periodLabel: string;
+  liquidBalance?: number;
 }) {
   return (
     <Card className="gradient-balance text-white">
-      <p className="text-xs font-bold uppercase tracking-wider text-white/70">{periodLabel} · Net</p>
+      <div className="flex items-baseline justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-white/70">{periodLabel} · Net</p>
+        {liquidBalance != null ? (
+          <p className="text-[0.7rem] font-semibold text-white/70">
+            Wallets <span className="font-black tabular-nums text-white">{formatMoney(liquidBalance, currency as 'BDT')}</span>
+          </p>
+        ) : null}
+      </div>
       <p className="mt-1 text-4xl font-black tracking-tight tabular-nums">{formatMoney(net, currency as 'BDT')}</p>
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="flex items-center gap-2 rounded-xl bg-white/10 p-3 backdrop-blur">
@@ -427,6 +498,38 @@ function SummaryCard({
     );
   }
   return <Card className="p-3">{inner}</Card>;
+}
+
+function LaunchpadTile({
+  label,
+  subtitle,
+  icon,
+  tone,
+  onClick,
+}: {
+  label: string;
+  subtitle?: string;
+  icon: React.ReactNode;
+  tone: 'emerald' | 'indigo' | 'pink' | 'violet';
+  onClick: () => void;
+}) {
+  const toneClass = {
+    emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200',
+    indigo: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200',
+    pink: 'bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-200',
+    violet: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-200',
+  }[tone];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-2xl border border-zinc-200 bg-white p-2 text-center transition active:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:active:bg-zinc-800"
+    >
+      <span className={`grid h-9 w-9 place-items-center rounded-xl ${toneClass}`}>{icon}</span>
+      <span className="text-[0.7rem] font-bold tracking-tight text-zinc-700 dark:text-zinc-200">{label}</span>
+      {subtitle ? <span className="line-clamp-1 text-[0.6rem] text-zinc-500">{subtitle}</span> : null}
+    </button>
+  );
 }
 
 function QuickAction({ tone, label, onClick }: { tone: 'rose' | 'emerald' | 'sky'; label: string; onClick: () => void }) {

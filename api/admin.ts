@@ -100,6 +100,10 @@ async function clearOwnedData(accountId: string) {
     await client.query('delete from subscriptions where account_id=$1', [accountId]);
     await client.query('delete from reminders where account_id=$1', [accountId]);
     await client.query('delete from activity_logs where account_id=$1', [accountId]);
+    await client.query('delete from budgets where account_id=$1', [accountId]);
+    await client.query('delete from wallets where account_id=$1', [accountId]);
+    await client.query('delete from goal_contributions where account_id=$1', [accountId]);
+    await client.query('delete from goals where account_id=$1', [accountId]);
   });
 }
 

@@ -1,7 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
+  budgetSchema,
   contactSchema,
   expenseSchema,
+  goalContributionSchema,
+  goalSchema,
   incomeSchema,
   itemSchema,
   loanPaymentSchema,
@@ -11,6 +14,7 @@ import {
   sharedGroupSchema,
   subscriptionSchema,
   transferSchema,
+  walletSchema,
 } from '../src/domain/validation.js';
 import { makeId, requireAccount } from './_lib/auth.js';
 import { pool } from './_lib/db.js';
@@ -55,6 +59,10 @@ async function readSnapshot(accountId: string) {
     subscriptions,
     reminders,
     activities,
+    budgets,
+    wallets,
+    goals,
+    goalContributions,
   ] = await Promise.all([
     pool.query('select * from preferences where account_id = $1 limit 1', [accountId]),
     pool.query('select * from contacts where account_id = $1 order by name asc', [accountId]),
@@ -69,6 +77,10 @@ async function readSnapshot(accountId: string) {
     pool.query('select * from subscriptions where account_id = $1 order by next_due_date asc', [accountId]),
     pool.query('select * from reminders where account_id = $1 order by due_at asc', [accountId]),
     pool.query('select * from activity_logs where account_id = $1 order by created_at desc limit 120', [accountId]),
+    pool.query('select * from budgets where account_id = $1 order by category asc', [accountId]),
+    pool.query('select * from wallets where account_id = $1 order by created_at asc', [accountId]),
+    pool.query('select * from goals where account_id = $1 order by created_at desc', [accountId]),
+    pool.query('select * from goal_contributions where account_id = $1 order by date desc, created_at desc', [accountId]),
   ]);
 
   const pref = preferences.rows[0];
@@ -223,6 +235,46 @@ async function readSnapshot(accountId: string) {
       title: row.title,
       detail: row.detail,
       amount: row.amount == null ? undefined : numberValue(row.amount),
+      createdAt: isoDateTime(row.created_at),
+    })),
+    budgets: budgets.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      category: row.category,
+      monthlyLimit: numberValue(row.monthly_limit),
+      notifyAt: Number(row.notify_at ?? 80),
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    wallets: wallets.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      method: row.method,
+      name: row.name,
+      openingBalance: numberValue(row.opening_balance),
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    goals: goals.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      name: row.name,
+      targetAmount: numberValue(row.target_amount),
+      savedAmount: numberValue(row.saved_amount),
+      walletMethod: row.wallet_method || undefined,
+      deadline: isoDate(row.deadline),
+      notes: row.notes || '',
+      status: row.status,
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    goalContributions: goalContributions.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      goalId: row.goal_id,
+      amount: numberValue(row.amount),
+      date: isoDate(row.date),
+      note: row.note || '',
       createdAt: isoDateTime(row.created_at),
     })),
   };
@@ -705,6 +757,138 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     if (action === 'dismissReminder') {
       await pool.query(`update reminders set status='dismissed', updated_at=now() where id=$1 and account_id=$2`, [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'addBudget' || action === 'updateBudget') {
+      const input = budgetSchema.parse(action === 'addBudget' ? payload : payload.input);
+      if (action === 'addBudget') {
+        const id = makeId('budget');
+        await pool.query(
+          `insert into budgets (id, account_id, category, monthly_limit, notify_at, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,now(),now())
+           on conflict (account_id, category)
+           do update set monthly_limit = excluded.monthly_limit, notify_at = excluded.notify_at, updated_at = now()`,
+          [id, account.id, input.category, input.monthlyLimit, input.notifyAt],
+        );
+        await activity(account.id, 'budget', id, `Budget for ${input.category}`, `Monthly limit ${input.monthlyLimit}`, input.monthlyLimit);
+      } else {
+        await pool.query(
+          `update budgets set category=$1, monthly_limit=$2, notify_at=$3, updated_at=now()
+           where id=$4 and account_id=$5`,
+          [input.category, input.monthlyLimit, input.notifyAt, payload.id, account.id],
+        );
+        await activity(account.id, 'budget', payload.id, `Updated ${input.category} budget`, `Limit ${input.monthlyLimit}`, input.monthlyLimit);
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteBudget') {
+      const existing = await pool.query('select category, monthly_limit from budgets where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
+      await pool.query('delete from budgets where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'budget', payload.id, `Deleted ${row.category} budget`, 'Budget removed.', numberValue(row.monthly_limit));
+      }
+      return ok(response);
+    }
+
+    if (action === 'upsertWallet') {
+      const input = walletSchema.parse(payload);
+      const id = makeId('wallet');
+      await pool.query(
+        `insert into wallets (id, account_id, method, name, opening_balance, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,now(),now())
+         on conflict (account_id, method)
+         do update set name = excluded.name, opening_balance = excluded.opening_balance, updated_at = now()`,
+        [id, account.id, input.method, input.name, input.openingBalance],
+      );
+      await activity(account.id, 'wallet', id, `Wallet ${input.method}`, `Opening balance ${input.openingBalance}`, input.openingBalance);
+      return ok(response);
+    }
+
+    if (action === 'deleteWallet') {
+      const existing = await pool.query('select method, name from wallets where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
+      await pool.query('delete from wallets where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'wallet', payload.id, `Removed ${row.name} wallet`, `Method ${row.method}`);
+      }
+      return ok(response);
+    }
+
+    if (action === 'addGoal' || action === 'updateGoal') {
+      const input = goalSchema.parse(action === 'addGoal' ? payload : payload.input);
+      const id = action === 'addGoal' ? makeId('goal') : payload.id;
+      if (action === 'addGoal') {
+        await pool.query(
+          `insert into goals (id, account_id, name, target_amount, saved_amount, wallet_method, deadline, notes, status, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
+          [id, account.id, input.name, input.targetAmount, input.savedAmount, input.walletMethod || null, input.deadline || null, input.notes, input.status],
+        );
+        await activity(account.id, 'goal', id, `Goal: ${input.name}`, `Target ${input.targetAmount}`, input.targetAmount);
+      } else {
+        await pool.query(
+          `update goals set name=$1, target_amount=$2, saved_amount=$3, wallet_method=$4, deadline=$5, notes=$6, status=$7, updated_at=now()
+           where id=$8 and account_id=$9`,
+          [input.name, input.targetAmount, input.savedAmount, input.walletMethod || null, input.deadline || null, input.notes, input.status, id, account.id],
+        );
+        await activity(account.id, 'goal', id, `Updated ${input.name}`, `Target ${input.targetAmount}`, input.targetAmount);
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteGoal') {
+      const existing = await pool.query('select name from goals where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
+      await pool.query('delete from goals where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await activity(account.id, 'goal', payload.id, `Deleted goal: ${row.name}`, 'Goal removed.');
+      }
+      return ok(response);
+    }
+
+    if (action === 'contributeToGoal') {
+      const input = goalContributionSchema.parse(payload);
+      const id = makeId('contribution');
+      await pool.query(
+        `insert into goal_contributions (id, account_id, goal_id, amount, date, note, created_at)
+         values ($1,$2,$3,$4,$5,$6,now())`,
+        [id, account.id, input.goalId, input.amount, input.date, input.note],
+      );
+      await pool.query(
+        'update goals set saved_amount = saved_amount + $1, updated_at = now() where id = $2 and account_id = $3',
+        [input.amount, input.goalId, account.id],
+      );
+      const goal = await pool.query('select name, saved_amount, target_amount from goals where id=$1 and account_id=$2', [input.goalId, account.id]);
+      const goalRow = goal.rows[0];
+      if (goalRow) {
+        await activity(
+          account.id,
+          'goalContribution',
+          id,
+          `Saved toward ${goalRow.name}`,
+          `Progress ${numberValue(goalRow.saved_amount)}/${numberValue(goalRow.target_amount)}`,
+          input.amount,
+        );
+        if (Number(goalRow.saved_amount) >= Number(goalRow.target_amount)) {
+          await pool.query(`update goals set status='completed', updated_at=now() where id=$1 and account_id=$2`, [input.goalId, account.id]);
+        }
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteGoalContribution') {
+      const existing = await pool.query('select goal_id, amount from goal_contributions where id=$1 and account_id=$2', [payload.id, account.id]);
+      const row = existing.rows[0];
+      await pool.query('delete from goal_contributions where id=$1 and account_id=$2', [payload.id, account.id]);
+      if (row) {
+        await pool.query(
+          'update goals set saved_amount = greatest(0, saved_amount - $1), updated_at = now() where id = $2 and account_id = $3',
+          [numberValue(row.amount), row.goal_id, account.id],
+        );
+        await activity(account.id, 'goalContribution', payload.id, 'Reverted goal contribution', 'Contribution removed.', numberValue(row.amount));
+      }
       return ok(response);
     }
 

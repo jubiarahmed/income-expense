@@ -7,8 +7,11 @@ import type {
   UserPreferences,
 } from '../domain/models';
 import type {
+  BudgetInput,
   ContactInput,
   ExpenseInput,
+  GoalContributionInput,
+  GoalInput,
   IncomeInput,
   ItemInput,
   LoanInput,
@@ -18,6 +21,7 @@ import type {
   SharedGroupInput,
   SubscriptionInput,
   TransferInput,
+  WalletInput,
 } from '../domain/validation';
 import { apiFetch, postApi } from '../lib/api';
 
@@ -46,6 +50,10 @@ function emptySnapshot(): AppDataSnapshot {
     subscriptions: [],
     reminders: [],
     activities: [],
+    budgets: [],
+    wallets: [],
+    goals: [],
+    goalContributions: [],
   };
 }
 
@@ -112,6 +120,16 @@ interface FinanceState extends AppDataSnapshot {
   requestNotificationPermission: () => Promise<void>;
   dismissReminder: (id: ID) => Promise<void>;
   exportData: () => Promise<AppDataSnapshot>;
+  addBudget: (input: BudgetInput) => Promise<void>;
+  updateBudget: (id: ID, input: BudgetInput) => Promise<void>;
+  deleteBudget: (id: ID) => Promise<void>;
+  upsertWallet: (input: WalletInput) => Promise<void>;
+  deleteWallet: (id: ID) => Promise<void>;
+  addGoal: (input: GoalInput) => Promise<void>;
+  updateGoal: (id: ID, input: GoalInput) => Promise<void>;
+  deleteGoal: (id: ID) => Promise<void>;
+  contributeToGoal: (input: GoalContributionInput) => Promise<void>;
+  deleteGoalContribution: (id: ID) => Promise<void>;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => {
@@ -200,5 +218,16 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
 
     dismissReminder: async (id) => run('dismissReminder', { id }),
     exportData: async () => apiFetch<AppDataSnapshot>('/api/app?action=snapshot'),
+
+    addBudget: async (input) => run('addBudget', input),
+    updateBudget: async (id, input) => run('updateBudget', { id, input }),
+    deleteBudget: async (id) => run('deleteBudget', { id }),
+    upsertWallet: async (input) => run('upsertWallet', input),
+    deleteWallet: async (id) => run('deleteWallet', { id }),
+    addGoal: async (input) => run('addGoal', input),
+    updateGoal: async (id, input) => run('updateGoal', { id, input }),
+    deleteGoal: async (id) => run('deleteGoal', { id }),
+    contributeToGoal: async (input) => run('contributeToGoal', input),
+    deleteGoalContribution: async (id) => run('deleteGoalContribution', { id }),
   };
 });

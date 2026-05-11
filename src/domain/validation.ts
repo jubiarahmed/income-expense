@@ -127,6 +127,35 @@ export const signInSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+export const budgetSchema = z.object({
+  category: categorySchema,
+  monthlyLimit: moneySchema,
+  notifyAt: z.coerce.number().int().min(50).max(100).optional().default(80),
+});
+
+export const walletSchema = z.object({
+  method: z.enum(PAYMENT_METHODS),
+  name: z.string().trim().min(1, 'Name is required').max(40),
+  openingBalance: z.coerce.number().optional().default(0),
+});
+
+export const goalSchema = z.object({
+  name: z.string().trim().min(1, 'Goal name is required').max(60),
+  targetAmount: moneySchema,
+  savedAmount: z.coerce.number().min(0).optional().default(0),
+  walletMethod: z.enum(PAYMENT_METHODS).optional(),
+  deadline: optionalDateSchema,
+  notes: z.string().trim().optional().default(''),
+  status: z.enum(['active', 'completed', 'archived']).optional().default('active'),
+});
+
+export const goalContributionSchema = z.object({
+  goalId: idSchema,
+  amount: moneySchema,
+  date: dateSchema,
+  note: z.string().trim().optional().default(''),
+});
+
 export type ContactInput = z.infer<typeof contactSchema>;
 export type ExpenseInput = z.infer<typeof expenseSchema>;
 export type IncomeInput = z.infer<typeof incomeSchema>;
@@ -140,3 +169,7 @@ export type SubscriptionInput = z.infer<typeof subscriptionSchema>;
 export type PreferencesInput = z.infer<typeof preferencesSchema>;
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type SignInInput = z.infer<typeof signInSchema>;
+export type BudgetInput = z.infer<typeof budgetSchema>;
+export type WalletInput = z.infer<typeof walletSchema>;
+export type GoalInput = z.infer<typeof goalSchema>;
+export type GoalContributionInput = z.infer<typeof goalContributionSchema>;

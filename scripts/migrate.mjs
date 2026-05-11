@@ -212,6 +212,52 @@ create table if not exists activity_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists budgets (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  category text not null,
+  monthly_limit numeric(12,2) not null,
+  notify_at integer not null default 80,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (account_id, category)
+);
+
+create table if not exists wallets (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  method text not null,
+  name text not null,
+  opening_balance numeric(12,2) not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (account_id, method)
+);
+
+create table if not exists goals (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  name text not null,
+  target_amount numeric(12,2) not null,
+  saved_amount numeric(12,2) not null default 0,
+  wallet_method text,
+  deadline date,
+  notes text not null default '',
+  status text not null default 'active' check (status in ('active','completed','archived')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists goal_contributions (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  goal_id text not null references goals(id) on delete cascade,
+  amount numeric(12,2) not null,
+  date date not null,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+
 create index if not exists contacts_account_idx on contacts(account_id);
 create index if not exists expenses_account_date_idx on expenses(account_id, date desc);
 create index if not exists incomes_account_date_idx on incomes(account_id, date desc);
@@ -224,6 +270,10 @@ create index if not exists item_records_account_idx on item_records(account_id);
 create index if not exists subscriptions_account_idx on subscriptions(account_id);
 create index if not exists reminders_account_idx on reminders(account_id);
 create index if not exists activity_logs_account_idx on activity_logs(account_id, created_at desc);
+create index if not exists budgets_account_idx on budgets(account_id);
+create index if not exists wallets_account_idx on wallets(account_id);
+create index if not exists goals_account_idx on goals(account_id);
+create index if not exists goal_contributions_account_idx on goal_contributions(account_id, date desc);
 `;
 
 await pool.query(sql);
