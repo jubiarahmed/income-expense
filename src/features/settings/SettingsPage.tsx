@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Bell, Download, LogOut, Monitor, Moon, Shield, Smartphone, Sun } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bell, BellRing, Download, LogOut, Monitor, Moon, Shield, Smartphone, Sun } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card, SectionHeader } from '../../components/ui/Card';
-import { Field, SelectInput, TextInput } from '../../components/ui/Form';
+import { Field, SelectInput } from '../../components/ui/Form';
 import { APP_VERSION, CURRENCIES } from '../../domain/constants';
 import type { CurrencyCode, ThemeMode } from '../../domain/models';
 import { useAuthStore } from '../../state/useAuthStore';
@@ -18,8 +19,8 @@ export function SettingsPage() {
   } = useFinanceStore();
   const account = useAuthStore((state) => state.account);
   const signOut = useAuthStore((state) => state.signOut);
+  const navigate = useNavigate();
   const [currency, setCurrency] = useState<CurrencyCode>(preferences.currency);
-  const [reminderDaysBefore, setReminderDaysBefore] = useState(preferences.reminderDaysBefore.toString());
   const [theme, setTheme] = useState<ThemeMode>(preferences.theme);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -37,7 +38,7 @@ export function SettingsPage() {
     try {
       await updatePreferences({
         currency,
-        reminderDaysBefore: Number(reminderDaysBefore),
+        reminderDaysBefore: preferences.reminderDaysBefore || 2,
         theme,
         notificationsEnabled: preferences.notificationsEnabled,
       });
@@ -56,7 +57,7 @@ export function SettingsPage() {
     try {
       await updatePreferences({
         currency: account?.role === 'superadmin' ? preferences.currency : currency,
-        reminderDaysBefore: account?.role === 'superadmin' ? preferences.reminderDaysBefore : Number(reminderDaysBefore),
+        reminderDaysBefore: preferences.reminderDaysBefore || 2,
         notificationsEnabled: preferences.notificationsEnabled,
         theme: nextTheme,
       });
@@ -160,16 +161,6 @@ export function SettingsPage() {
               ))}
             </SelectInput>
           </Field>
-          <Field label="Reminder lead time">
-            <TextInput
-              value={reminderDaysBefore}
-              onChange={(event) => setReminderDaysBefore(event.target.value)}
-              inputMode="numeric"
-              min={0}
-              max={30}
-              type="number"
-            />
-          </Field>
           <div className="grid grid-cols-3 gap-2">
             <Button variant={theme === 'light' ? 'primary' : 'secondary'} icon={<Sun size={16} />} onClick={() => void changeTheme('light')}>
               Light
@@ -189,11 +180,14 @@ export function SettingsPage() {
 
       <Card className="space-y-3">
         <SectionHeader title="Reminders" />
-        <p className="text-sm leading-6 text-slate-500">
-          Expense Tracker shows due and overdue reminders in-app. Browser notifications are used only when permission is granted and the web platform allows it.
+        <p className="text-sm leading-6 text-zinc-500">
+          Open the Reminders page to see overdue items, upcoming dues, and recurring-expense suggestions based on your history.
         </p>
-        <Button variant="secondary" className="w-full" icon={<Bell size={16} />} onClick={() => void requestNotificationPermission()}>
-          {preferences.notificationsEnabled ? 'Notifications enabled' : 'Enable notifications'}
+        <Button variant="secondary" className="w-full" icon={<BellRing size={16} />} onClick={() => navigate('/reminders')}>
+          Open Reminders
+        </Button>
+        <Button variant="ghost" className="w-full" icon={<Bell size={16} />} onClick={() => void requestNotificationPermission()}>
+          {preferences.notificationsEnabled ? 'Browser notifications on' : 'Enable browser notifications'}
         </Button>
       </Card>
 

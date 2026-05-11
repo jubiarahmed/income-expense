@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { format, parseISO, subDays } from 'date-fns';
-import { ArrowLeftRight, ArrowUpRight, Copy, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, ArrowUpRight, Copy, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { BottomSheet } from '../../components/ui/BottomSheet';
 import { Button } from '../../components/ui/Button';
@@ -21,6 +21,7 @@ import {
   type SharedExpense,
   type Transfer,
 } from '../../domain/models';
+import { clsx } from 'clsx';
 import { getExpenseTotals, getIncomeTotals, getSharedBalances } from '../../lib/calculations';
 import { formatFullDate } from '../../lib/date';
 import { formatMoney } from '../../lib/money';
@@ -46,27 +47,308 @@ function dateLabel(dateStr: string): string {
 export function TransactionsPage() {
   const reload = useFinanceStore((state) => state.reload);
   const [mode, setMode] = useState<TransactionMode>('expense');
+  const [search, setSearch] = useState('');
+  const trimmed = search.trim();
+  const searching = trimmed.length > 0;
 
   return (
     <PullToRefresh onRefresh={reload}>
       <div className="space-y-5">
-        <SegmentedControl
-          value={mode}
-          onChange={setMode}
-          tone={mode === 'income' ? 'income' : mode === 'transfer' ? 'transfer' : 'expense'}
-          options={[
-            { label: 'Expense', value: 'expense' },
-            { label: 'Income', value: 'income' },
-            { label: 'Transfer', value: 'transfer' },
-            { label: 'Shared', value: 'shared' },
-          ]}
-        />
-        {mode === 'expense' ? <DailyExpensesPanel /> : null}
-        {mode === 'income' ? <IncomePanel /> : null}
-        {mode === 'transfer' ? <TransferPanel /> : null}
-        {mode === 'shared' ? <SharedExpensesPanel /> : null}
+        <SearchBar value={search} onChange={setSearch} />
+        {searching ? (
+          <UnifiedSearchResults query={trimmed} onClear={() => setSearch('')} />
+        ) : (
+          <>
+            <SegmentedControl
+              value={mode}
+              onChange={setMode}
+              tone={mode === 'income' ? 'income' : mode === 'transfer' ? 'transfer' : 'expense'}
+              options={[
+                { label: 'Expense', value: 'expense' },
+                { label: 'Income', value: 'income' },
+                { label: 'Transfer', value: 'transfer' },
+                { label: 'Shared', value: 'shared' },
+              ]}
+            />
+            {mode === 'expense' ? <DailyExpensesPanel /> : null}
+            {mode === 'income' ? <IncomePanel /> : null}
+            {mode === 'transfer' ? <TransferPanel /> : null}
+            {mode === 'shared' ? <SharedExpensesPanel /> : null}
+          </>
+        )}
       </div>
     </PullToRefresh>
+  );
+}
+
+function SearchBar({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <div className="relative">
+      <Search
+        size={18}
+        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+      />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search all records (income, expense, transfer)…"
+        className={clsx(
+          'min-h-12 w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-10 text-base outline-none transition placeholder:text-zinc-400',
+          'focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50',
+        )}
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          aria-label="Clear search"
+          className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-zinc-100 text-zinc-600 active:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
+        >
+          <X size={14} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+type UnifiedHit =
+  | { kind: 'expense'; item: Expense }
+  | { kind: 'income'; item: Income }
+  | { kind: 'transfer'; item: Transfer };
+
+function matchesQuery(haystacks: (string | number | undefined)[], q: string) {
+  const needle = q.toLowerCase();
+  return haystacks.some((value) => {
+    if (value == null) return false;
+    return String(value).toLowerCase().includes(needle);
+  });
+}
+
+function UnifiedSearchResults({ query, onClear }: { query: string; onClear: () => void }) {
+  const { expenses, incomes, transfers, preferences } = useFinanceStore();
+  const pushToast = useToastStore((state) => state.push);
+  const deleteExpense = useFinanceStore((state) => state.deleteExpense);
+  const addExpense = useFinanceStore((state) => state.addExpense);
+  const deleteIncome = useFinanceStore((state) => state.deleteIncome);
+  const addIncome = useFinanceStore((state) => state.addIncome);
+  const deleteTransfer = useFinanceStore((state) => state.deleteTransfer);
+  const addTransfer = useFinanceStore((state) => state.addTransfer);
+  const [editingExpense, setEditingExpense] = useState<Expense | undefined>();
+  const [editingIncome, setEditingIncome] = useState<Income | undefined>();
+  const [editingTransfer, setEditingTransfer] = useState<Transfer | undefined>();
+
+  const hits = useMemo<UnifiedHit[]>(() => {
+    const list: UnifiedHit[] = [];
+    for (const expense of expenses) {
+      if (matchesQuery([expense.note, expense.category, expense.paymentMethod, expense.amount, expense.tags?.join(' ')], query)) {
+        list.push({ kind: 'expense', item: expense });
+      }
+    }
+    for (const income of incomes) {
+      if (matchesQuery([income.note, income.source, income.category, income.paymentMethod, income.amount], query)) {
+        list.push({ kind: 'income', item: income });
+      }
+    }
+    for (const transfer of transfers) {
+      if (matchesQuery([transfer.note, transfer.fromMethod, transfer.toMethod, transfer.amount, transfer.fee], query)) {
+        list.push({ kind: 'transfer', item: transfer });
+      }
+    }
+    return list.sort((a, b) => b.item.date.localeCompare(a.item.date));
+  }, [expenses, incomes, transfers, query]);
+
+  async function handleDeleteExpense(expense: Expense) {
+    const captured = {
+      amount: expense.amount,
+      category: expense.category,
+      note: expense.note,
+      date: expense.date,
+      paymentMethod: expense.paymentMethod,
+      tags: expense.tags.join(', '),
+      receiptImage: expense.receiptImage,
+    };
+    try {
+      await deleteExpense(expense.id);
+      pushToast('Expense deleted.', {
+        action: { label: 'Undo', onClick: () => addExpense(captured) },
+      });
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not delete.', { tone: 'danger' });
+    }
+  }
+  async function handleDeleteIncome(income: Income) {
+    const captured = {
+      amount: income.amount,
+      category: income.category,
+      source: income.source,
+      note: income.note,
+      date: income.date,
+      paymentMethod: income.paymentMethod,
+    };
+    try {
+      await deleteIncome(income.id);
+      pushToast('Income deleted.', {
+        action: { label: 'Undo', onClick: () => addIncome(captured) },
+      });
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not delete.', { tone: 'danger' });
+    }
+  }
+  async function handleDeleteTransfer(transfer: Transfer) {
+    const captured = {
+      amount: transfer.amount,
+      fromMethod: transfer.fromMethod,
+      toMethod: transfer.toMethod,
+      fee: transfer.fee,
+      date: transfer.date,
+      note: transfer.note,
+    };
+    try {
+      await deleteTransfer(transfer.id);
+      pushToast('Transfer deleted.', {
+        action: { label: 'Undo', onClick: () => addTransfer(captured) },
+      });
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not delete.', { tone: 'danger' });
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-bold tracking-tight text-zinc-700 dark:text-zinc-200">
+          {hits.length} result{hits.length === 1 ? '' : 's'} for "{query}"
+        </p>
+        <Button variant="ghost" className="min-h-9 px-3" onClick={onClear}>
+          Clear
+        </Button>
+      </div>
+
+      {hits.length ? (
+        <div className="space-y-2">
+          {hits.map((hit) => {
+            if (hit.kind === 'expense') {
+              const style = getExpenseCategoryStyle(hit.item.category);
+              const Icon = style.icon;
+              return (
+                <Card key={`e-${hit.item.id}`} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${style.bg} ${style.fg}`}>
+                      <Icon size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone="danger">Expense</Badge>
+                        <p className="truncate text-sm font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+                          {hit.item.note || hit.item.category}
+                        </p>
+                      </div>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {hit.item.category} · {hit.item.paymentMethod} · {formatFullDate(hit.item.date)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-black tabular-nums text-rose-600 dark:text-rose-400">
+                      −{formatMoney(hit.item.amount, preferences.currency)}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<Pencil size={16} />} onClick={() => setEditingExpense(hit.item)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" className="min-h-9 px-3 text-rose-600" icon={<Trash2 size={16} />} onClick={() => void handleDeleteExpense(hit.item)}>
+                      Delete
+                    </Button>
+                  </div>
+                </Card>
+              );
+            }
+            if (hit.kind === 'income') {
+              const style = getIncomeCategoryStyle(hit.item.category);
+              const Icon = style.icon;
+              return (
+                <Card key={`i-${hit.item.id}`} className="p-3">
+                  <div className="flex items-start gap-3">
+                    <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${style.bg} ${style.fg}`}>
+                      <Icon size={20} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone="good">Income</Badge>
+                        <p className="truncate text-sm font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+                          {hit.item.source || hit.item.note || hit.item.category}
+                        </p>
+                      </div>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {hit.item.category} · {hit.item.paymentMethod} · {formatFullDate(hit.item.date)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-black tabular-nums text-emerald-600 dark:text-emerald-400">
+                      +{formatMoney(hit.item.amount, preferences.currency)}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<Pencil size={16} />} onClick={() => setEditingIncome(hit.item)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" className="min-h-9 px-3 text-rose-600" icon={<Trash2 size={16} />} onClick={() => void handleDeleteIncome(hit.item)}>
+                      Delete
+                    </Button>
+                  </div>
+                </Card>
+              );
+            }
+            return (
+              <Card key={`t-${hit.item.id}`} className="p-3">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+                    <ArrowLeftRight size={20} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <Badge tone="info">Transfer</Badge>
+                      <p className="truncate text-sm font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+                        {hit.item.fromMethod} → {hit.item.toMethod}
+                      </p>
+                    </div>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {hit.item.note || formatFullDate(hit.item.date)}
+                      {hit.item.fee > 0 ? ` · fee ${formatMoney(hit.item.fee, preferences.currency)}` : ''}
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-black tabular-nums text-sky-700 dark:text-sky-300">
+                    {formatMoney(hit.item.amount, preferences.currency)}
+                  </p>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<Pencil size={16} />} onClick={() => setEditingTransfer(hit.item)}>
+                    Edit
+                  </Button>
+                  <Button variant="ghost" className="min-h-9 px-3 text-rose-600" icon={<Trash2 size={16} />} onClick={() => void handleDeleteTransfer(hit.item)}>
+                    Delete
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          title="No matches"
+          body="Try a different note, category, source, amount, or payment method."
+          icon={<Search size={22} />}
+        />
+      )}
+
+      <BottomSheet open={Boolean(editingExpense)} title="Edit Expense" onClose={() => setEditingExpense(undefined)}>
+        {editingExpense ? <ExpenseForm expense={editingExpense} onDone={() => setEditingExpense(undefined)} /> : null}
+      </BottomSheet>
+      <BottomSheet open={Boolean(editingIncome)} title="Edit Income" onClose={() => setEditingIncome(undefined)}>
+        {editingIncome ? <IncomeForm income={editingIncome} onDone={() => setEditingIncome(undefined)} /> : null}
+      </BottomSheet>
+      <BottomSheet open={Boolean(editingTransfer)} title="Edit Transfer" onClose={() => setEditingTransfer(undefined)}>
+        {editingTransfer ? <TransferForm transfer={editingTransfer} onDone={() => setEditingTransfer(undefined)} /> : null}
+      </BottomSheet>
+    </section>
   );
 }
 

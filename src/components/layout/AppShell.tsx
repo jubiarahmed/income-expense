@@ -1,9 +1,11 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { ArrowLeftRight, BarChart3, Home, Plus, Settings, Shield, UserRound, WalletCards } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeftRight, BarChart3, Bell, Home, Plus, Settings, Shield, UserRound, WalletCards } from 'lucide-react';
 import { clsx } from 'clsx';
 import { GlobalAddSheet } from './GlobalAddSheet';
 import { useAuthStore } from '../../state/useAuthStore';
+import { useFinanceStore } from '../../state/useFinanceStore';
 import { useUiStore } from '../../state/useUiStore';
+import { getUpcomingReminders, predictRecurringExpenses } from '../../lib/reminders';
 
 const baseTabs = [
   { to: '/', label: 'Home', icon: Home },
@@ -18,6 +20,7 @@ const titles: Record<string, string> = {
   '/transactions': 'Records',
   '/people': 'People',
   '/obligations': 'Obligations',
+  '/reminders': 'Reminders',
   '/settings': 'Settings',
   '/admin': 'Superadmin',
 };
@@ -25,8 +28,18 @@ const titles: Record<string, string> = {
 export function AppShell() {
   const openAddFlow = useUiStore((state) => state.openAddFlow);
   const account = useAuthStore((state) => state.account);
+  const navigate = useNavigate();
   const location = useLocation();
   const isSuperadmin = account?.role === 'superadmin';
+  const expenses = useFinanceStore((state) => state.expenses);
+  const loans = useFinanceStore((state) => state.loans);
+  const loanPayments = useFinanceStore((state) => state.loanPayments);
+  const items = useFinanceStore((state) => state.items);
+  const subscriptions = useFinanceStore((state) => state.subscriptions);
+  const reminderCount = !isSuperadmin
+    ? getUpcomingReminders(loans, loanPayments, items, subscriptions, 14).length +
+      predictRecurringExpenses(expenses, 7).length
+    : 0;
   const title = isSuperadmin && location.pathname === '/' ? 'Superadmin' : (titles[location.pathname] ?? 'Expense Tracker');
   const tabs = isSuperadmin
     ? [
@@ -50,6 +63,21 @@ export function AppShell() {
               <h1 className="text-lg font-black tracking-tight">{title}</h1>
             </div>
           </div>
+          {!isSuperadmin ? (
+            <button
+              type="button"
+              onClick={() => navigate('/reminders')}
+              className="relative grid h-10 w-10 place-items-center rounded-xl bg-white text-zinc-700 ring-1 ring-zinc-200 active:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-800"
+              aria-label="Reminders"
+            >
+              <Bell size={18} />
+              {reminderCount > 0 ? (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[0.65rem] font-black text-white">
+                  {reminderCount > 9 ? '9+' : reminderCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
         </div>
       </header>
 

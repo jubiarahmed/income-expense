@@ -8,6 +8,7 @@ import { AuthPage } from './features/auth/AuthPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { ObligationsPage } from './features/obligations/ObligationsPage';
 import { PeoplePage } from './features/people/PeoplePage';
+import { RemindersPage } from './features/reminders/RemindersPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { TransactionsPage } from './features/transactions/TransactionsPage';
 import { useAuthStore } from './state/useAuthStore';
@@ -79,6 +80,7 @@ export default function App() {
           <Route path="transactions" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <TransactionsPage />} />
           <Route path="people" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <PeoplePage />} />
           <Route path="obligations" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <ObligationsPage />} />
+          <Route path="reminders" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <RemindersPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="admin" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <Navigate to="/" replace />} />
         </Route>
