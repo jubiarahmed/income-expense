@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react';
-import { Check, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Check, FileText, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { BottomSheet } from '../../components/ui/BottomSheet';
 import { Button } from '../../components/ui/Button';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { TextInput } from '../../components/ui/Form';
+import { CURRENCY_SYMBOLS } from '../../domain/constants';
 import type { Contact, Loan } from '../../domain/models';
 import { getDerivedItemStatus, getDerivedLoanStatus, getLoanRemaining, getPersonSummaries } from '../../lib/calculations';
+import { buildContactLedger } from '../../lib/debtStatements';
 import { formatFullDate, formatShortDate } from '../../lib/date';
 import { formatMoney } from '../../lib/money';
 import { useFinanceStore } from '../../state/useFinanceStore';
+import { useToastStore } from '../../state/useToastStore';
 import { useUiStore } from '../../state/useUiStore';
 import { LoanPaymentForm } from '../obligations/LoanForm';
 import { ContactForm } from './ContactForm';
@@ -160,7 +163,29 @@ function PersonDetail({
   activities: ReturnType<typeof useFinanceStore.getState>['activities'];
 }) {
   const { preferences, markItemReturned } = useFinanceStore();
+  const pushToast = useToastStore((state) => state.push);
   const [repayingLoan, setRepayingLoan] = useState<Loan | null>(null);
+
+  async function shareLedger() {
+    const text = buildContactLedger(contact, loans, payments, CURRENCY_SYMBOLS[preferences.currency]);
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      try {
+        await (navigator as Navigator & { share: (data: { title?: string; text?: string }) => Promise<void> }).share({
+          title: `Ledger — ${contact.name}`,
+          text,
+        });
+        return;
+      } catch {}
+    }
+    if (typeof navigator !== 'undefined' && 'clipboard' in navigator) {
+      try {
+        await navigator.clipboard.writeText(text);
+        pushToast('Ledger copied to clipboard.', { tone: 'success' });
+        return;
+      } catch {}
+    }
+    pushToast('Sharing not available on this device.', { tone: 'info' });
+  }
 
   if (repayingLoan) {
     return (
@@ -179,11 +204,18 @@ function PersonDetail({
 
   return (
     <div className="space-y-5">
-      <Card className="p-3">
-        <p className="text-sm font-bold text-slate-500">Contact</p>
-        <p className="mt-1 text-lg font-black">{contact.name}</p>
-        <p className="text-sm text-slate-500">{contact.phone || 'No phone saved'}</p>
-        {contact.notes ? <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{contact.notes}</p> : null}
+      <Card className="p-3 space-y-3">
+        <div>
+          <p className="text-sm font-bold text-slate-500">Contact</p>
+          <p className="mt-1 text-lg font-black">{contact.name}</p>
+          <p className="text-sm text-slate-500">{contact.phone || 'No phone saved'}</p>
+          {contact.notes ? <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">{contact.notes}</p> : null}
+        </div>
+        {loans.length ? (
+          <Button variant="secondary" className="w-full" icon={<FileText size={16} />} onClick={() => void shareLedger()}>
+            Share ledger / statement
+          </Button>
+        ) : null}
       </Card>
 
       <section>

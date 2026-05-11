@@ -73,6 +73,9 @@ export const loanSchema = z.object({
   dueDate: optionalDateSchema,
   notes: z.string().trim().optional().default(''),
   status: z.enum(['active', 'settled']).optional().default('active'),
+  interestRate: z.coerce.number().min(0).max(1000).optional().default(0),
+  interestType: z.enum(['none', 'flat', 'apr']).optional().default('none'),
+  installmentsCount: z.coerce.number().int().min(0).max(120).optional(),
 });
 
 export const loanPaymentSchema = z.object({

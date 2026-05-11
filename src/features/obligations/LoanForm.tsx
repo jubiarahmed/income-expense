@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { ContactSelect } from '../../components/ui/ContactSelect';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { ChipButton, Field, TextArea, TextInput } from '../../components/ui/Form';
+import { ChipButton, Field, SelectInput, TextArea, TextInput } from '../../components/ui/Form';
 import type { Segment } from '../transactions/types';
-import type { Loan, LoanDirection } from '../../domain/models';
+import type { Loan, LoanDirection, LoanInterestType } from '../../domain/models';
 import { todayISO } from '../../lib/date';
 import { useFinanceStore } from '../../state/useFinanceStore';
 
@@ -24,6 +24,9 @@ export function LoanForm({ loan, onDone }: { loan?: Loan; onDone?: () => void })
   const [dueDate, setDueDate] = useState(loan?.dueDate ?? '');
   const [notes, setNotes] = useState(loan?.notes ?? '');
   const [status, setStatus] = useState(loan?.status ?? 'active');
+  const [interestType, setInterestType] = useState<LoanInterestType>(loan?.interestType ?? 'none');
+  const [interestRate, setInterestRate] = useState((loan?.interestRate ?? 0).toString());
+  const [installmentsCount, setInstallmentsCount] = useState(loan?.installmentsCount?.toString() ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -32,7 +35,18 @@ export function LoanForm({ loan, onDone }: { loan?: Loan; onDone?: () => void })
     setSaving(true);
     setError('');
     try {
-      const input = { personId, direction, amount: Number(amount), date, dueDate, notes, status };
+      const input = {
+        personId,
+        direction,
+        amount: Number(amount),
+        date,
+        dueDate,
+        notes,
+        status,
+        interestType,
+        interestRate: interestType === 'none' ? 0 : Number(interestRate || 0),
+        installmentsCount: installmentsCount ? Number(installmentsCount) : undefined,
+      };
       if (loan) {
         await updateLoan(loan.id, input);
       } else {
@@ -88,6 +102,37 @@ export function LoanForm({ loan, onDone }: { loan?: Loan; onDone?: () => void })
           />
         </Field>
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Interest">
+          <SelectInput value={interestType} onChange={(event) => setInterestType(event.target.value as LoanInterestType)}>
+            <option value="none">No interest</option>
+            <option value="flat">Flat fee (%)</option>
+            <option value="apr">APR (% per year)</option>
+          </SelectInput>
+        </Field>
+        <Field label={interestType === 'apr' ? 'Rate (%/year)' : 'Rate (% total)'}>
+          <TextInput
+            inputMode="decimal"
+            value={interestRate}
+            onChange={(event) => setInterestRate(event.target.value)}
+            placeholder="0"
+            disabled={interestType === 'none'}
+          />
+        </Field>
+      </div>
+
+      <Field label="Installments (optional)">
+        <TextInput
+          inputMode="numeric"
+          type="number"
+          value={installmentsCount}
+          onChange={(event) => setInstallmentsCount(event.target.value)}
+          placeholder="e.g. 12"
+          min={0}
+          max={120}
+        />
+      </Field>
+
       <Field label="Notes">
         <TextArea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Reason or context" />
       </Field>

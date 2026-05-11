@@ -83,6 +83,9 @@ create table if not exists expenses (
 alter table expenses add column if not exists receipt_image text;
 alter table expenses add column if not exists merchant text;
 alter table preferences add column if not exists notification_prefs jsonb not null default '{}'::jsonb;
+alter table loans add column if not exists interest_rate numeric(7,3) not null default 0;
+alter table loans add column if not exists interest_type text not null default 'none';
+alter table loans add column if not exists installments_count integer;
 
 create table if not exists saved_filters (
   id text primary key,

@@ -33,8 +33,10 @@ import { IncomeForm } from './IncomeForm';
 import { TransferForm } from './TransferForm';
 import { SharedExpenseForm } from './SharedExpenseForm';
 import { SharedGroupForm } from './SharedGroupForm';
+import { SettlementView } from './SettlementView';
 import { AdvancedSearchPanel } from './AdvancedSearchPanel';
-import type { SavedFilterQuery, SavedFilterScope } from '../../domain/models';
+import type { SavedFilterQuery, SavedFilterScope, SharedGroup as SharedGroupType } from '../../domain/models';
+import { Scale } from 'lucide-react';
 
 type TransactionMode = 'expense' | 'income' | 'transfer' | 'shared';
 
@@ -1246,6 +1248,7 @@ function SharedExpensesPanel() {
   const [editing, setEditing] = useState<SharedExpense | undefined>();
   const [editingGroupId, setEditingGroupId] = useState<string | undefined>();
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  const [settlingGroup, setSettlingGroup] = useState<SharedGroupType | undefined>();
   const balances = getSharedBalances(sharedExpenses);
 
   function displayName(id: string) {
@@ -1332,7 +1335,15 @@ function SharedExpensesPanel() {
                   </div>
                 ) : (
                   <div className="mt-3 flex gap-2">
-                    <Button variant="ghost" className="min-h-9 flex-1 px-2" onClick={() => setEditingGroupId(group.id)}>
+                    <Button
+                      variant="primary"
+                      className="min-h-9 flex-1 px-2"
+                      icon={<Scale size={16} />}
+                      onClick={() => setSettlingGroup(group)}
+                    >
+                      Settle up
+                    </Button>
+                    <Button variant="ghost" className="min-h-9 px-3" onClick={() => setEditingGroupId(group.id)}>
                       Edit
                     </Button>
                     <Button variant="ghost" className="min-h-9 px-3 text-rose-600" icon={<Trash2 size={16} />} onClick={() => setConfirmDeleteGroupId(group.id)}>
@@ -1430,6 +1441,9 @@ function SharedExpensesPanel() {
         {editingGroupId ? (
           <SharedGroupForm group={sharedGroups.find((group) => group.id === editingGroupId)} onDone={() => setEditingGroupId(undefined)} />
         ) : null}
+      </BottomSheet>
+      <BottomSheet open={Boolean(settlingGroup)} title={settlingGroup ? `Settle: ${settlingGroup.name}` : 'Settle up'} onClose={() => setSettlingGroup(undefined)}>
+        {settlingGroup ? <SettlementView group={settlingGroup} onDone={() => setSettlingGroup(undefined)} /> : null}
       </BottomSheet>
     </section>
   );

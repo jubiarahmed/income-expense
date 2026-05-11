@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { addDays, addMonths, addYears, format, parseISO } from 'date-fns';
-import { Check, Pencil, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { Check, FileText, MessageSquare, Pencil, Plus, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { BottomSheet } from '../../components/ui/BottomSheet';
 import { Button } from '../../components/ui/Button';
@@ -14,9 +14,13 @@ import type { ItemRecord, Loan, Subscription } from '../../domain/models';
 import {
   getDerivedItemStatus,
   getDerivedLoanStatus,
+  getLoanInterest,
   getLoanRemaining,
   getSubscriptionMonthlyCost,
 } from '../../lib/calculations';
+import { buildLoanReminderMessage, buildLoanStatement } from '../../lib/debtStatements';
+import { CURRENCY_SYMBOLS } from '../../domain/constants';
+import { useToastStore } from '../../state/useToastStore';
 import { formatFullDate, formatShortDate, isDateDueSoon, isDateOverdue } from '../../lib/date';
 import { formatMoney } from '../../lib/money';
 import { useFinanceStore } from '../../state/useFinanceStore';
@@ -62,11 +66,29 @@ export function ObligationsPage() {
 function LoansPanel() {
   const { contacts, loans, loanPayments, preferences, deleteLoan, deleteLoanPayment } = useFinanceStore();
   const openAddFlow = useUiStore((state) => state.openAddFlow);
+  const pushToast = useToastStore((state) => state.push);
   const [filter, setFilter] = useState<'all' | 'active' | 'settled' | 'overdue'>('active');
   const [editing, setEditing] = useState<Loan | undefined>();
   const [repaying, setRepaying] = useState<Loan | undefined>();
   const [confirmDeleteLoanId, setConfirmDeleteLoanId] = useState<string | null>(null);
   const [confirmDeletePaymentId, setConfirmDeletePaymentId] = useState<string | null>(null);
+
+  async function shareText(text: string, title: string) {
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      try {
+        await (navigator as Navigator & { share: (data: { title?: string; text?: string }) => Promise<void> }).share({ title, text });
+        return;
+      } catch {}
+    }
+    if (typeof navigator !== 'undefined' && 'clipboard' in navigator) {
+      try {
+        await navigator.clipboard.writeText(text);
+        pushToast('Copied to clipboard.', { tone: 'success' });
+        return;
+      } catch {}
+    }
+    pushToast('Sharing not available on this device.', { tone: 'info' });
+  }
   const filtered = useMemo(
     () =>
       loans.filter((loan) => {
@@ -90,8 +112,10 @@ function LoansPanel() {
           filtered.map((loan) => {
             const person = contacts.find((contact) => contact.id === loan.personId);
             const remaining = getLoanRemaining(loan, loanPayments);
+            const interest = getLoanInterest(loan);
             const status = getDerivedLoanStatus(loan, loanPayments);
             const payments = loanPayments.filter((payment) => payment.loanId === loan.id);
+            const currencySymbol = CURRENCY_SYMBOLS[preferences.currency];
             return (
               <Card key={loan.id} className="p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -101,6 +125,14 @@ function LoansPanel() {
                       {loan.direction === 'lent' ? 'I lent' : 'I borrowed'} · {formatFullDate(loan.date)}
                       {loan.dueDate ? ` · due ${formatShortDate(loan.dueDate)}` : ''}
                     </p>
+                    {loan.interestType !== 'none' && loan.interestRate > 0 ? (
+                      <p className="mt-0.5 text-xs text-indigo-600 dark:text-indigo-400">
+                        {loan.interestRate}% {loan.interestType === 'apr' ? 'APR' : 'flat'} · interest {formatMoney(interest, preferences.currency)}
+                      </p>
+                    ) : null}
+                    {loan.installmentsCount ? (
+                      <p className="mt-0.5 text-[0.65rem] text-zinc-400">{loan.installmentsCount} installments planned</p>
+                    ) : null}
                   </div>
                   <div className="text-right">
                     <p className="font-black">{formatMoney(remaining, preferences.currency)}</p>
@@ -168,17 +200,37 @@ function LoansPanel() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="mt-3 flex gap-2">
-                    <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<RotateCcw size={16} />} onClick={() => setRepaying(loan)}>
-                      Repay
-                    </Button>
-                    <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<Pencil size={16} />} onClick={() => setEditing(loan)}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost" className="min-h-9 px-3 text-rose-600" icon={<Trash2 size={16} />} onClick={() => setConfirmDeleteLoanId(loan.id)}>
-                      Delete
-                    </Button>
-                  </div>
+                  <>
+                    <div className="mt-3 flex gap-2">
+                      <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<RotateCcw size={16} />} onClick={() => setRepaying(loan)}>
+                        Repay
+                      </Button>
+                      <Button variant="ghost" className="min-h-9 flex-1 px-2" icon={<Pencil size={16} />} onClick={() => setEditing(loan)}>
+                        Edit
+                      </Button>
+                      <Button variant="ghost" className="min-h-9 px-3 text-rose-600" icon={<Trash2 size={16} />} onClick={() => setConfirmDeleteLoanId(loan.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        variant="secondary"
+                        className="min-h-9 flex-1 px-2 text-xs"
+                        icon={<FileText size={14} />}
+                        onClick={() => void shareText(buildLoanStatement(loan, payments, person, currencySymbol), 'Loan statement')}
+                      >
+                        Statement
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="min-h-9 flex-1 px-2 text-xs"
+                        icon={<MessageSquare size={14} />}
+                        onClick={() => void shareText(buildLoanReminderMessage(loan, payments, person, currencySymbol), 'Loan reminder')}
+                      >
+                        Reminder
+                      </Button>
+                    </div>
+                  </>
                 )}
               </Card>
             );

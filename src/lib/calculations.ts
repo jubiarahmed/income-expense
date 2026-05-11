@@ -13,12 +13,31 @@ import type {
 import { getLastNDays, getMonthRange, isDateDueSoon, isDateOverdue } from './date';
 import { roundMoney } from './money';
 
+function getAccruedInterest(loan: Loan): number {
+  if (!loan.interestType || loan.interestType === 'none' || !loan.interestRate) return 0;
+  if (loan.interestType === 'flat') {
+    // Flat fee on the principal — simple percentage.
+    return roundMoney((loan.amount * loan.interestRate) / 100);
+  }
+  // APR — accrue daily based on the loan's start date.
+  const start = new Date(loan.date);
+  const now = new Date();
+  const elapsedDays = Math.max(0, (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  const yearlyRate = loan.interestRate / 100;
+  return roundMoney((loan.amount * yearlyRate * elapsedDays) / 365);
+}
+
+export function getLoanInterest(loan: Loan): number {
+  return getAccruedInterest(loan);
+}
+
 export function getLoanRemaining(loan: Loan, payments: LoanPayment[]) {
   if (loan.status === 'settled') return 0;
   const paid = payments
     .filter((payment) => payment.loanId === loan.id)
     .reduce((total, payment) => total + payment.amount, 0);
-  return Math.max(0, roundMoney(loan.amount - paid));
+  const interest = getAccruedInterest(loan);
+  return Math.max(0, roundMoney(loan.amount + interest - paid));
 }
 
 export function getDerivedLoanStatus(loan: Loan, payments: LoanPayment[]) {

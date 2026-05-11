@@ -186,6 +186,9 @@ async function readSnapshot(accountId: string) {
       dueDate: isoDate(row.due_date),
       notes: row.notes,
       status: row.status,
+      interestRate: numberValue(row.interest_rate),
+      interestType: (row.interest_type as 'none' | 'flat' | 'apr') || 'none',
+      installmentsCount: row.installments_count == null ? undefined : Number(row.installments_count),
       createdAt: isoDateTime(row.created_at),
       updatedAt: isoDateTime(row.updated_at),
     })),
@@ -612,16 +615,43 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const id = action === 'addLoan' ? makeId('loan') : payload.id;
       if (action === 'addLoan') {
         await pool.query(
-          `insert into loans (id, account_id, person_id, direction, amount, date, due_date, notes, status, created_at, updated_at)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),now())`,
-          [id, account.id, input.personId, input.direction, input.amount, input.date, input.dueDate || null, input.notes, input.status],
+          `insert into loans (id, account_id, person_id, direction, amount, date, due_date, notes, status, interest_rate, interest_type, installments_count, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,now(),now())`,
+          [
+            id,
+            account.id,
+            input.personId,
+            input.direction,
+            input.amount,
+            input.date,
+            input.dueDate || null,
+            input.notes,
+            input.status,
+            input.interestRate,
+            input.interestType,
+            input.installmentsCount ?? null,
+          ],
         );
         await activity(account.id, 'loan', id, input.direction === 'lent' ? 'Money lent' : 'Money borrowed', input.notes || 'Loan record added.', input.amount, input.personId);
       } else {
         await pool.query(
-          `update loans set person_id=$1, direction=$2, amount=$3, date=$4, due_date=$5, notes=$6, status=$7, updated_at=now()
-           where id=$8 and account_id=$9`,
-          [input.personId, input.direction, input.amount, input.date, input.dueDate || null, input.notes, input.status, id, account.id],
+          `update loans set person_id=$1, direction=$2, amount=$3, date=$4, due_date=$5, notes=$6, status=$7,
+             interest_rate=$8, interest_type=$9, installments_count=$10, updated_at=now()
+           where id=$11 and account_id=$12`,
+          [
+            input.personId,
+            input.direction,
+            input.amount,
+            input.date,
+            input.dueDate || null,
+            input.notes,
+            input.status,
+            input.interestRate,
+            input.interestType,
+            input.installmentsCount ?? null,
+            id,
+            account.id,
+          ],
         );
         await activity(
           account.id,

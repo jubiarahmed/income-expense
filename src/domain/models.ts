@@ -230,6 +230,8 @@ export interface SharedExpense {
   updatedAt: string;
 }
 
+export type LoanInterestType = 'none' | 'flat' | 'apr';
+
 export interface Loan {
   id: ID;
   accountId: ID;
@@ -240,6 +242,9 @@ export interface Loan {
   dueDate?: string;
   notes: string;
   status: LoanStatus;
+  interestRate: number;
+  interestType: LoanInterestType;
+  installmentsCount?: number;
   createdAt: string;
   updatedAt: string;
 }
