@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { apiFetch } from '../../lib/api';
+import { useToastStore } from '../../state/useToastStore';
 import { useNavigate } from 'react-router-dom';
 import {
   Activity as ActivityIcon,
@@ -92,13 +94,49 @@ const actionLabel: Record<ActionFilter, string> = {
 export function ActivityPage() {
   const navigate = useNavigate();
   const reload = useFinanceStore((state) => state.reload);
-  const activities = useFinanceStore((state) => state.activities);
+  const liveActivities = useFinanceStore((state) => state.activities);
   const preferences = useFinanceStore((state) => state.preferences);
+  const pushToast = useToastStore((state) => state.push);
   const [entity, setEntity] = useState<'all' | ActivityEntityType>('all');
   const [actionFilter, setActionFilter] = useState<ActionFilter>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [query, setQuery] = useState('');
+  const [olderActivities, setOlderActivities] = useState<ActivityLog[]>([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Combine the live (latest 120) snapshot with anything older we've fetched.
+  // De-dupe by id in case the snapshot reload races with our pagination.
+  const activities = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: ActivityLog[] = [];
+    for (const entry of [...liveActivities, ...olderActivities]) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      merged.push(entry);
+    }
+    merged.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return merged;
+  }, [liveActivities, olderActivities]);
+
+  async function loadOlder() {
+    if (loadingMore || !hasMoreOlder) return;
+    setLoadingMore(true);
+    try {
+      const oldest = activities[activities.length - 1];
+      const before = oldest?.createdAt ?? new Date().toISOString();
+      const result = await apiFetch<{ activities: ActivityLog[]; hasMore: boolean; nextBefore: string | null }>(
+        `/api/app?action=activities&before=${encodeURIComponent(before)}&limit=60`,
+      );
+      setOlderActivities((current) => [...current, ...result.activities]);
+      setHasMoreOlder(result.hasMore);
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not load older activity.', { tone: 'danger' });
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -138,7 +176,7 @@ export function ActivityPage() {
             <div>
               <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-zinc-600 dark:text-zinc-400">Activity</p>
               <p className="text-sm font-bold tracking-tight text-zinc-700 dark:text-zinc-200">
-                {activities.length} events tracked · {filtered.length} shown
+                {activities.length} loaded · {filtered.length} shown
               </p>
             </div>
           </div>
@@ -186,7 +224,7 @@ export function ActivityPage() {
           </div>
         </Card>
 
-        <SectionHeader title={`Latest ${activities.length === 120 ? '120' : activities.length} events`} />
+        <SectionHeader title={`Latest ${activities.length} events`} />
 
         {filtered.length ? (
           <div className="space-y-2">
@@ -217,9 +255,18 @@ export function ActivityPage() {
                 </Card>
               );
             })}
-            {activities.length === 120 ? (
-              <p className="px-1 text-center text-xs text-zinc-500">Showing the latest 120 events. Older history is not retained.</p>
-            ) : null}
+            {hasMoreOlder ? (
+              <button
+                type="button"
+                onClick={() => void loadOlder()}
+                disabled={loadingMore}
+                className="mx-auto block min-h-10 rounded-full bg-zinc-100 px-4 text-xs font-bold text-zinc-700 active:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-200"
+              >
+                {loadingMore ? 'Loading…' : 'Load older activity'}
+              </button>
+            ) : (
+              <p className="px-1 text-center text-xs text-zinc-500">End of recorded activity.</p>
+            )}
           </div>
         ) : (
           <EmptyState

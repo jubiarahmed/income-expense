@@ -1,3 +1,5 @@
+import { sentry } from './sentry';
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: 'include',
@@ -10,6 +12,10 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
+    // 4xx is usually a user-visible validation issue; only forward 5xx to Sentry.
+    if (response.status >= 500) {
+      sentry.captureMessage(`API ${response.status} ${path}: ${body.error ?? 'unknown'}`, 'error');
+    }
     throw new Error(body.error ?? 'Request failed.');
   }
   return body as T;

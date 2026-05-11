@@ -349,6 +349,40 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return ok(response, await readSnapshot(account.id));
     }
 
+    if (request.method === 'GET' && action === 'activities') {
+      const before = String(request.query.before || '');
+      const limitRaw = Number(request.query.limit ?? 60);
+      const limit = Math.min(200, Math.max(10, Number.isFinite(limitRaw) ? limitRaw : 60));
+      const params: unknown[] = [account.id];
+      let where = 'account_id = $1';
+      if (before) {
+        params.push(before);
+        where += ` and created_at < $${params.length}`;
+      }
+      params.push(limit + 1); // fetch one extra to detect whether more remain
+      const result = await pool.query(
+        `select * from activity_logs where ${where} order by created_at desc limit $${params.length}`,
+        params,
+      );
+      const rows = result.rows.slice(0, limit);
+      const hasMore = result.rows.length > limit;
+      return ok(response, {
+        activities: rows.map((row) => ({
+          id: row.id,
+          accountId: row.account_id,
+          entityType: row.entity_type,
+          entityId: row.entity_id,
+          personId: row.person_id || undefined,
+          title: row.title,
+          detail: row.detail,
+          amount: row.amount == null ? undefined : numberValue(row.amount),
+          createdAt: isoDateTime(row.created_at),
+        })),
+        hasMore,
+        nextBefore: rows.length ? isoDateTime(rows[rows.length - 1].created_at) : null,
+      });
+    }
+
     if (request.method !== 'POST') return fail(response, 405, 'Method not allowed.');
 
     if (account.role === 'superadmin' && action !== 'updatePreferences') {

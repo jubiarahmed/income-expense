@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Button } from '../components/ui/Button';
+import { sentry } from '../lib/sentry';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -15,6 +16,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBound
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Expense Tracker crashed', error, info);
+    sentry.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   render() {
