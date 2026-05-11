@@ -834,7 +834,8 @@ function TransferPanel() {
                           {transfer.fromMethod} → {transfer.toMethod}
                         </p>
                         <p className="mt-0.5 text-xs text-zinc-500">
-                          {transfer.note || formatFullDate(transfer.date)}
+                          {formatFullDate(transfer.date)}
+                          {transfer.note ? ` · ${transfer.note}` : ''}
                           {transfer.fee > 0 ? ` · fee ${formatMoney(transfer.fee, preferences.currency)}` : ''}
                         </p>
                       </div>
@@ -1046,7 +1047,7 @@ function SharedExpensesPanel() {
                   <div>
                     <p className="font-bold">{expense.note}</p>
                     <p className="text-xs text-zinc-500">
-                      {sharedGroups.find((group) => group.id === expense.groupId)?.name ?? 'Group'} · paid by {displayName(expense.payerId)}
+                      {formatFullDate(expense.date)} · {sharedGroups.find((group) => group.id === expense.groupId)?.name ?? 'Group'} · paid by {displayName(expense.payerId)}
                     </p>
                   </div>
                   <div className="text-right">

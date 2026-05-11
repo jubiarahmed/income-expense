@@ -98,7 +98,8 @@ function LoansPanel() {
                   <div>
                     <p className="font-black">{person?.name ?? 'Unknown person'}</p>
                     <p className="text-xs text-slate-500">
-                      {loan.direction === 'lent' ? 'I lent' : 'I borrowed'} · due {formatShortDate(loan.dueDate)}
+                      {loan.direction === 'lent' ? 'I lent' : 'I borrowed'} · {formatFullDate(loan.date)}
+                      {loan.dueDate ? ` · due ${formatShortDate(loan.dueDate)}` : ''}
                     </p>
                   </div>
                   <div className="text-right">
@@ -227,7 +228,8 @@ function ItemsPanel() {
                   <div>
                     <p className="font-black">{item.itemName}</p>
                     <p className="text-xs text-slate-500">
-                      {item.direction === 'lent' ? 'Lent to' : 'Borrowed from'} {person?.name ?? 'Unknown'} · due {formatShortDate(item.dueDate)}
+                      {item.direction === 'lent' ? 'Lent to' : 'Borrowed from'} {person?.name ?? 'Unknown'} · {formatFullDate(item.date)}
+                      {item.dueDate ? ` · due ${formatShortDate(item.dueDate)}` : ''}
                     </p>
                   </div>
                   <Badge tone={status === 'overdue' ? 'danger' : status === 'returned' ? 'good' : 'warn'}>{status}</Badge>

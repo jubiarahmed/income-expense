@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { format, startOfMonth, subMonths } from 'date-fns';
+import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, CalendarClock, ChevronRight, Plus } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { Field, SelectInput } from '../../components/ui/Form';
 import { PullToRefresh } from '../../components/ui/PullToRefresh';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import {
@@ -14,7 +15,7 @@ import {
   getObligationStats,
   getUpcomingObligations,
 } from '../../lib/calculations';
-import { formatShortDate, getMonthRange } from '../../lib/date';
+import { formatRelativeDateTime, formatShortDate, getMonthRange } from '../../lib/date';
 import { formatMoney, roundMoney } from '../../lib/money';
 import { useFinanceStore } from '../../state/useFinanceStore';
 import { useUiStore } from '../../state/useUiStore';
@@ -32,10 +33,17 @@ const periodLabel: Record<Period, string> = {
   allTime: 'All time',
 };
 
-function getPeriodRange(period: Period): { start?: string; end?: string } {
+function getPeriodRange(period: Period, allTimeMonth?: string): { start?: string; end?: string } {
   const now = new Date();
   if (period === 'thisMonth') return getMonthRange(now);
   if (period === 'lastMonth') return getMonthRange(subMonths(now, 1));
+  if (allTimeMonth) {
+    const monthDate = parseISO(`${allTimeMonth}-01`);
+    return {
+      start: format(startOfMonth(monthDate), 'yyyy-MM-dd'),
+      end: format(endOfMonth(monthDate), 'yyyy-MM-dd'),
+    };
+  }
   return {};
 }
 
@@ -101,9 +109,18 @@ export function DashboardPage() {
   const openAddFlow = useUiStore((state) => state.openAddFlow);
   const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>('thisMonth');
+  const [allTimeMonth, setAllTimeMonth] = useState<string>(''); // '' = show all
   const stats = getObligationStats(contacts, loans, loanPayments, sharedExpenses, items, subscriptions);
 
-  const range = useMemo(() => getPeriodRange(period), [period]);
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const expense of expenses) if (expense.date) set.add(expense.date.slice(0, 7));
+    for (const income of incomes) if (income.date) set.add(income.date.slice(0, 7));
+    return [...set].sort().reverse();
+  }, [expenses, incomes]);
+
+  const effectiveMonth = period === 'allTime' && allTimeMonth ? allTimeMonth : undefined;
+  const range = useMemo(() => getPeriodRange(period, effectiveMonth), [period, effectiveMonth]);
   const periodExpenses = useMemo(() => inRange(expenses, range), [expenses, range]);
   const periodIncomes = useMemo(() => inRange(incomes, range), [incomes, range]);
   const totals = getExpenseTotals(expenses);
@@ -131,7 +148,10 @@ export function DashboardPage() {
       <div className="space-y-5">
         <SegmentedControl
           value={period}
-          onChange={setPeriod}
+          onChange={(next) => {
+            setPeriod(next);
+            if (next !== 'allTime') setAllTimeMonth('');
+          }}
           options={[
             { label: 'This month', value: 'thisMonth' },
             { label: 'Last month', value: 'lastMonth' },
@@ -139,12 +159,29 @@ export function DashboardPage() {
           ]}
         />
 
+        {period === 'allTime' && availableMonths.length ? (
+          <Field label="Filter by month">
+            <SelectInput value={allTimeMonth} onChange={(event) => setAllTimeMonth(event.target.value)}>
+              <option value="">All months</option>
+              {availableMonths.map((monthKey) => (
+                <option key={monthKey} value={monthKey}>
+                  {format(parseISO(`${monthKey}-01`), 'MMMM yyyy')}
+                </option>
+              ))}
+            </SelectInput>
+          </Field>
+        ) : null}
+
         <BalanceHero
           currency={preferences.currency}
           income={periodIncomeTotal}
           expense={periodExpenseTotal}
           net={periodNet}
-          periodLabel={periodLabel[period]}
+          periodLabel={
+            period === 'allTime' && allTimeMonth
+              ? format(parseISO(`${allTimeMonth}-01`), 'MMMM yyyy')
+              : periodLabel[period]
+          }
         />
 
         <section className="grid grid-cols-2 gap-3">
@@ -196,7 +233,13 @@ export function DashboardPage() {
         </Card>
 
         <section>
-          <SectionHeader title={`Spending by category — ${periodLabel[period]}`} />
+          <SectionHeader
+            title={`Spending by category — ${
+              period === 'allTime' && allTimeMonth
+                ? format(parseISO(`${allTimeMonth}-01`), 'MMMM yyyy')
+                : periodLabel[period]
+            }`}
+          />
           {categories.length ? (
             <Card className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -288,8 +331,13 @@ export function DashboardPage() {
           <div className="space-y-2">
             {activities.slice(0, 6).map((activity) => (
               <Card key={activity.id} className="p-3">
-                <p className="font-bold text-zinc-900 dark:text-zinc-50">{activity.title}</p>
-                <p className="text-sm text-zinc-500">{activity.detail}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-zinc-900 dark:text-zinc-50">{activity.title}</p>
+                    {activity.detail ? <p className="text-sm text-zinc-500">{activity.detail}</p> : null}
+                  </div>
+                  <p className="shrink-0 text-[0.7rem] font-semibold text-zinc-400">{formatRelativeDateTime(activity.createdAt)}</p>
+                </div>
               </Card>
             ))}
           </div>

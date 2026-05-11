@@ -1,6 +1,7 @@
 import {
   addDays,
   differenceInCalendarDays,
+  differenceInMinutes,
   endOfMonth,
   format,
   isAfter,
@@ -64,4 +65,20 @@ export function getLastNDays(days: number) {
 
 export function isSameISODate(left: string, right: string) {
   return isSameDay(parseISO(left), parseISO(right));
+}
+
+export function formatRelativeDateTime(value?: string) {
+  if (!value) return '';
+  const at = typeof value === 'string' ? new Date(value) : value;
+  const now = new Date();
+  const minutes = differenceInMinutes(now, at);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const sameDay = isSameDay(at, now);
+  if (sameDay) return format(at, "p");
+  const yesterday = isSameDay(at, subDays(now, 1));
+  if (yesterday) return `Yesterday · ${format(at, 'p')}`;
+  const days = differenceInCalendarDays(now, at);
+  if (days < 7) return `${days}d ago · ${format(at, 'p')}`;
+  return format(at, 'MMM d, yyyy · p');
 }

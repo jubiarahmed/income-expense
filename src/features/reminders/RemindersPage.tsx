@@ -130,11 +130,18 @@ export function RemindersPage() {
                           {entry.category} · {entry.paymentMethod} · last {formatFullDate(entry.lastDate)}
                         </p>
                         <p className="mt-0.5 text-[0.7rem] font-semibold text-indigo-600 dark:text-indigo-300">
-                          Expected {daysCopy(entry.daysUntil)} ({formatFullDate(entry.predictedDate)}) · seen {entry.occurrences}×
+                          Expected {daysCopy(entry.daysUntil)} ({formatFullDate(entry.predictedDate)})
                         </p>
+                        <p className="mt-0.5 text-[0.65rem] text-zinc-500">{entry.reason}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs font-semibold text-zinc-400">Avg</p>
+                        <Badge
+                          tone={entry.confidence === 'high' ? 'good' : entry.confidence === 'medium' ? 'info' : 'neutral'}
+                          className="mb-1"
+                        >
+                          {entry.confidence}
+                        </Badge>
+                        <p className="text-[0.65rem] font-semibold text-zinc-400">Avg</p>
                         <p className="font-black tabular-nums text-zinc-700 dark:text-zinc-200">
                           {formatMoney(entry.averageAmount, preferences.currency)}
                         </p>
