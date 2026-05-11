@@ -2,12 +2,13 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Calendar as CalendarIcon, CalendarClock, ChevronRight, Flag, Plus, Sparkles, Tag, Target, Wallet } from 'lucide-react';
+import { Activity as ActivityIcon, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bookmark, Calendar as CalendarIcon, CalendarClock, ChevronRight, Flag, Plus, Sparkles, Tag, Target, Wallet } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Field, SelectInput } from '../../components/ui/Form';
 import { PullToRefresh } from '../../components/ui/PullToRefresh';
+import { QuickAddBar } from '../../components/ui/QuickAddBar';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import {
   getExpenseTotals,
@@ -162,6 +163,8 @@ export function DashboardPage() {
   return (
     <PullToRefresh onRefresh={reload}>
       <div className="space-y-5">
+        <QuickAddBar />
+
         <SegmentedControl
           value={period}
           onChange={(next) => {
@@ -201,13 +204,15 @@ export function DashboardPage() {
           liquidBalance={liquidBalance}
         />
 
-        <section className="grid grid-cols-3 gap-2">
+        <section className="grid grid-cols-4 gap-2">
           <LaunchpadTile label="Wallets" tone="emerald" icon={<Wallet size={20} />} onClick={() => navigate('/wallets')} subtitle={formatMoney(liquidBalance, preferences.currency)} />
           <LaunchpadTile label="Budgets" tone="indigo" icon={<Target size={20} />} onClick={() => navigate('/budgets')} subtitle={`${activeBudgets} set`} />
           <LaunchpadTile label="Goals" tone="pink" icon={<Flag size={20} />} onClick={() => navigate('/goals')} subtitle={`${activeGoals} active`} />
           <LaunchpadTile label="Reports" tone="violet" icon={<BarChart3 size={20} />} onClick={() => navigate('/reports')} subtitle="Analyze" />
-          <LaunchpadTile label="Calendar" tone="amber" icon={<CalendarIcon size={20} />} onClick={() => navigate('/calendar')} subtitle="Monthly view" />
-          <LaunchpadTile label="Tags" tone="fuchsia" icon={<Tag size={20} />} onClick={() => navigate('/tags')} subtitle="Manage" />
+          <LaunchpadTile label="Calendar" tone="amber" icon={<CalendarIcon size={20} />} onClick={() => navigate('/calendar')} subtitle="Monthly" />
+          <LaunchpadTile label="Tags" tone="fuchsia" icon={<Tag size={20} />} onClick={() => navigate('/tags')} subtitle="Organize" />
+          <LaunchpadTile label="Templates" tone="violet" icon={<Bookmark size={20} />} onClick={() => navigate('/templates')} subtitle="One-tap" />
+          <LaunchpadTile label="Activity" tone="zinc" icon={<ActivityIcon size={20} />} onClick={() => navigate('/activity')} subtitle="Audit log" />
         </section>
 
         {insights.length ? (
@@ -512,7 +517,7 @@ function LaunchpadTile({
   label: string;
   subtitle?: string;
   icon: React.ReactNode;
-  tone: 'emerald' | 'indigo' | 'pink' | 'violet' | 'amber' | 'fuchsia';
+  tone: 'emerald' | 'indigo' | 'pink' | 'violet' | 'amber' | 'fuchsia' | 'zinc';
   onClick: () => void;
 }) {
   const toneClass = {
@@ -522,6 +527,7 @@ function LaunchpadTile({
     violet: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-200',
     amber: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-200',
     fuchsia: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950 dark:text-fuchsia-200',
+    zinc: 'bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200',
   }[tone];
   return (
     <button

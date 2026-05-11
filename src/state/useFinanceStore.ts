@@ -8,6 +8,8 @@ import type {
 } from '../domain/models';
 import type {
   BudgetInput,
+  BulkDeleteInput,
+  BulkExpenseUpdateInput,
   ContactInput,
   ExpenseInput,
   GoalContributionInput,
@@ -22,6 +24,7 @@ import type {
   SharedGroupInput,
   SubscriptionInput,
   TagRenameInput,
+  TemplateInput,
   TransferInput,
   WalletInput,
 } from '../domain/validation';
@@ -57,6 +60,7 @@ function emptySnapshot(): AppDataSnapshot {
     goals: [],
     goalContributions: [],
     savedFilters: [],
+    templates: [],
   };
 }
 
@@ -138,6 +142,12 @@ interface FinanceState extends AppDataSnapshot {
   deleteSavedFilter: (id: ID) => Promise<void>;
   renameTag: (input: TagRenameInput) => Promise<void>;
   deleteTag: (tag: string) => Promise<void>;
+  addTemplate: (input: TemplateInput) => Promise<void>;
+  updateTemplate: (id: ID, input: TemplateInput) => Promise<void>;
+  deleteTemplate: (id: ID) => Promise<void>;
+  recordTemplateUse: (id: ID) => Promise<void>;
+  bulkDeleteExpenses: (input: BulkDeleteInput) => Promise<void>;
+  bulkUpdateExpenses: (input: BulkExpenseUpdateInput) => Promise<void>;
 }
 
 export const useFinanceStore = create<FinanceState>((set, get) => {
@@ -243,5 +253,12 @@ export const useFinanceStore = create<FinanceState>((set, get) => {
     deleteSavedFilter: async (id) => run('deleteSavedFilter', { id }),
     renameTag: async (input) => run('renameTag', input),
     deleteTag: async (tag) => run('deleteTag', { tag }),
+
+    addTemplate: async (input) => run('addTemplate', input),
+    updateTemplate: async (id, input) => run('updateTemplate', { id, input }),
+    deleteTemplate: async (id) => run('deleteTemplate', { id }),
+    recordTemplateUse: async (id) => run('recordTemplateUse', { id }),
+    bulkDeleteExpenses: async (input) => run('bulkDeleteExpenses', input),
+    bulkUpdateExpenses: async (input) => run('bulkUpdateExpenses', input),
   };
 });

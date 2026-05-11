@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ArrowLeftRight, Check, HandCoins, PackageOpen, Plus, Repeat, Sparkles, UserPlus, Users, X } from 'lucide-react';
+import { ArrowLeftRight, Bookmark, Check, HandCoins, PackageOpen, Plus, Repeat, Sparkles, UserPlus, Users, X, Zap } from 'lucide-react';
 import { clsx } from 'clsx';
 import { BottomSheet } from '../ui/BottomSheet';
+import { QuickAddBar } from '../ui/QuickAddBar';
 import { ExpenseForm } from '../../features/transactions/ExpenseForm';
 import { IncomeForm } from '../../features/transactions/IncomeForm';
 import { TransferForm } from '../../features/transactions/TransferForm';
@@ -14,8 +15,10 @@ import { SharedGroupForm } from '../../features/transactions/SharedGroupForm';
 import { getExpenseCategoryStyle, getIncomeCategoryStyle } from '../../domain/categoryIcons';
 import { getAllExpenseCategories, getAllIncomeCategories } from '../../domain/customCategories';
 import { useFinanceStore } from '../../state/useFinanceStore';
+import { useToastStore } from '../../state/useToastStore';
 import { useUiStore, type AddFlowType, type ChooserTab } from '../../state/useUiStore';
-import type { ExpenseCategory, IncomeCategory } from '../../domain/models';
+import type { ExpenseCategory, IncomeCategory, PaymentMethod, TransactionTemplate } from '../../domain/models';
+import { todayISO } from '../../lib/date';
 
 const flowTitles: Record<AddFlowType, string> = {
   chooser: 'Add',
@@ -38,6 +41,12 @@ export function GlobalAddSheet() {
   const setChooserTab = useUiStore((state) => state.setChooserTab);
   const expenses = useFinanceStore((state) => state.expenses);
   const incomes = useFinanceStore((state) => state.incomes);
+  const templates = useFinanceStore((state) => state.templates);
+  const addExpense = useFinanceStore((state) => state.addExpense);
+  const addIncome = useFinanceStore((state) => state.addIncome);
+  const addTransfer = useFinanceStore((state) => state.addTransfer);
+  const recordTemplateUse = useFinanceStore((state) => state.recordTemplateUse);
+  const pushToast = useToastStore((state) => state.push);
   const open = Boolean(activeAddFlow);
   const title = activeAddFlow ? flowTitles[activeAddFlow] : 'Add';
 
@@ -77,11 +86,108 @@ export function GlobalAddSheet() {
   const expenseCategoryNames = getAllExpenseCategories(expenses);
   const incomeCategoryNames = getAllIncomeCategories(incomes);
 
+  const templatesForTab = templates.filter((template) => template.kind === chooserTab).slice(0, 6);
+
+  async function applyTemplate(template: TransactionTemplate) {
+    try {
+      if (template.kind === 'expense') {
+        if (template.data.amount) {
+          await addExpense({
+            amount: template.data.amount,
+            category: template.data.category ?? 'Other',
+            note: template.data.note ?? '',
+            merchant: template.data.merchant,
+            date: todayISO(),
+            paymentMethod: (template.data.paymentMethod as PaymentMethod) ?? 'Cash',
+            tags: template.data.tags ?? '',
+          });
+          await recordTemplateUse(template.id);
+          pushToast(`Logged ${template.name}.`, { tone: 'success' });
+          done();
+        } else {
+          setPresetExpense(template.data.category);
+          openAddFlow('expense');
+          void recordTemplateUse(template.id);
+        }
+      } else if (template.kind === 'income') {
+        if (template.data.amount) {
+          await addIncome({
+            amount: template.data.amount,
+            category: template.data.category ?? 'Others',
+            source: template.data.source ?? '',
+            note: template.data.note ?? '',
+            date: todayISO(),
+            paymentMethod: (template.data.paymentMethod as PaymentMethod) ?? 'Bank',
+          });
+          await recordTemplateUse(template.id);
+          pushToast(`Logged ${template.name}.`, { tone: 'success' });
+          done();
+        } else {
+          setPresetIncome(template.data.category);
+          openAddFlow('income');
+          void recordTemplateUse(template.id);
+        }
+      } else {
+        if (template.data.amount) {
+          await addTransfer({
+            amount: template.data.amount,
+            fromMethod: (template.data.fromMethod as PaymentMethod) ?? 'Bank',
+            toMethod: (template.data.toMethod as PaymentMethod) ?? 'Cash',
+            fee: template.data.fee ?? 0,
+            date: todayISO(),
+            note: template.data.note ?? '',
+          });
+          await recordTemplateUse(template.id);
+          pushToast(`Logged ${template.name}.`, { tone: 'success' });
+          done();
+        } else {
+          openAddFlow('transfer');
+          void recordTemplateUse(template.id);
+        }
+      }
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Could not apply template.', { tone: 'danger' });
+    }
+  }
+
   return (
     <BottomSheet open={open} title={title} onClose={done}>
       {activeAddFlow === 'chooser' ? (
         <div className="space-y-5 animate-rise">
+          <QuickAddBar />
+
           <ChooserTabs value={chooserTab} onChange={setChooserTab} />
+
+          {templatesForTab.length ? (
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                <Bookmark size={12} /> Templates
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {templatesForTab.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => void applyTemplate(template)}
+                    className={clsx(
+                      'inline-flex min-h-10 items-center gap-2 rounded-full border px-3 text-xs font-bold transition',
+                      template.kind === 'expense'
+                        ? 'border-rose-200 bg-rose-50 text-rose-700 active:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300'
+                        : template.kind === 'income'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 active:bg-emerald-100 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          : 'border-sky-200 bg-sky-50 text-sky-700 active:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300',
+                    )}
+                  >
+                    <Zap size={12} />
+                    {template.name}
+                    {template.data.amount ? (
+                      <span className="rounded-full bg-white/70 px-1.5 text-[0.6rem] tabular-nums dark:bg-zinc-900/70">{template.data.amount}</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {showCustomInput && (chooserTab === 'expense' || chooserTab === 'income') ? (
             <CustomCategoryRow
@@ -132,6 +238,16 @@ export function GlobalAddSheet() {
               <SmallChoice icon={<UserPlus size={18} />} label="Person" onClick={() => openAddFlow('contact')} />
               <SmallChoice icon={<Users size={18} />} label="Shared group" onClick={() => openAddFlow('sharedGroup')} />
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                closeAddFlow();
+                window.location.assign('/templates');
+              }}
+              className="mt-3 inline-flex min-h-9 items-center gap-1.5 text-xs font-bold text-violet-600 active:text-violet-700 dark:text-violet-400"
+            >
+              <Bookmark size={14} /> Manage templates
+            </button>
           </div>
         </div>
       ) : null}

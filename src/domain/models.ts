@@ -141,6 +141,33 @@ export interface SavedFilter {
   updatedAt: string;
 }
 
+export type TransactionTemplateKind = 'expense' | 'income' | 'transfer';
+
+export interface TransactionTemplateData {
+  amount?: number;
+  category?: string;
+  note?: string;
+  merchant?: string;
+  source?: string;
+  paymentMethod?: PaymentMethod;
+  fromMethod?: PaymentMethod;
+  toMethod?: PaymentMethod;
+  tags?: string;
+  fee?: number;
+}
+
+export interface TransactionTemplate {
+  id: ID;
+  accountId: ID;
+  name: string;
+  kind: TransactionTemplateKind;
+  data: TransactionTemplateData;
+  usesCount: number;
+  lastUsedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Income {
   id: ID;
   accountId: ID;
@@ -344,4 +371,5 @@ export interface AppDataSnapshot {
   goals: Goal[];
   goalContributions: GoalContribution[];
   savedFilters: SavedFilter[];
+  templates: TransactionTemplate[];
 }

@@ -208,11 +208,48 @@ export const tagRenameSchema = z.object({
   to: z.string().trim().min(1).max(40),
 });
 
+export const templateDataSchema = z.object({
+  amount: z.coerce.number().positive().optional(),
+  category: z.string().trim().max(40).optional(),
+  note: z.string().trim().max(240).optional(),
+  merchant: z.string().trim().max(40).optional(),
+  source: z.string().trim().max(60).optional(),
+  paymentMethod: z.enum(PAYMENT_METHODS).optional(),
+  fromMethod: z.enum(PAYMENT_METHODS).optional(),
+  toMethod: z.enum(PAYMENT_METHODS).optional(),
+  tags: z.string().trim().max(120).optional(),
+  fee: z.coerce.number().min(0).optional(),
+});
+
+export const templateSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(60),
+  kind: z.enum(['expense', 'income', 'transfer']),
+  data: templateDataSchema,
+});
+
+export const bulkExpenseUpdateSchema = z.object({
+  ids: z.array(idSchema).min(1).max(200),
+  patch: z.object({
+    category: categorySchema.optional(),
+    paymentMethod: z.enum(PAYMENT_METHODS).optional(),
+    addTag: z.string().trim().min(1).max(40).optional(),
+    removeTag: z.string().trim().min(1).max(40).optional(),
+  }),
+});
+
+export const bulkDeleteSchema = z.object({
+  ids: z.array(idSchema).min(1).max(200),
+});
+
 export type BudgetInput = z.infer<typeof budgetSchema>;
 export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
 export type SavedFilterInput = z.infer<typeof savedFilterSchema>;
 export type SavedFilterQueryInput = z.infer<typeof savedFilterQuerySchema>;
 export type TagRenameInput = z.infer<typeof tagRenameSchema>;
+export type TemplateInput = z.infer<typeof templateSchema>;
+export type TemplateDataInput = z.infer<typeof templateDataSchema>;
+export type BulkExpenseUpdateInput = z.infer<typeof bulkExpenseUpdateSchema>;
+export type BulkDeleteInput = z.infer<typeof bulkDeleteSchema>;
 export type WalletInput = z.infer<typeof walletSchema>;
 export type GoalInput = z.infer<typeof goalSchema>;
 export type GoalContributionInput = z.infer<typeof goalContributionSchema>;

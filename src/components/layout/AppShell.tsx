@@ -27,6 +27,8 @@ const titles: Record<string, string> = {
   '/reports': 'Reports',
   '/calendar': 'Calendar',
   '/tags': 'Tags',
+  '/templates': 'Templates',
+  '/activity': 'Activity log',
   '/settings': 'Settings',
   '/admin': 'Superadmin',
 };

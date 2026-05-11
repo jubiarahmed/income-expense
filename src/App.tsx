@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { AppShell } from './components/layout/AppShell';
 import { Toaster } from './components/ui/Toaster';
+import { ActivityPage } from './features/activity/ActivityPage';
 import { AdminPage } from './features/admin/AdminPage';
 import { AuthPage } from './features/auth/AuthPage';
 import { BudgetsPage } from './features/budgets/BudgetsPage';
@@ -15,6 +16,7 @@ import { RemindersPage } from './features/reminders/RemindersPage';
 import { ReportsPage } from './features/reports/ReportsPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { TagsPage } from './features/tags/TagsPage';
+import { TemplatesPage } from './features/templates/TemplatesPage';
 import { TransactionsPage } from './features/transactions/TransactionsPage';
 import { WalletsPage } from './features/wallets/WalletsPage';
 import { useAuthStore } from './state/useAuthStore';
@@ -93,6 +95,8 @@ export default function App() {
           <Route path="reports" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <ReportsPage />} />
           <Route path="calendar" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <CalendarPage />} />
           <Route path="tags" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <TagsPage />} />
+          <Route path="templates" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <TemplatesPage />} />
+          <Route path="activity" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <ActivityPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="admin" element={account.role === 'superadmin' ? <Navigate to="/" replace /> : <Navigate to="/" replace />} />
         </Route>

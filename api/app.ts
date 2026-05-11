@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   budgetSchema,
+  bulkDeleteSchema,
+  bulkExpenseUpdateSchema,
   contactSchema,
   expenseSchema,
   goalContributionSchema,
@@ -15,6 +17,7 @@ import {
   sharedGroupSchema,
   subscriptionSchema,
   tagRenameSchema,
+  templateSchema,
   transferSchema,
   walletSchema,
 } from '../src/domain/validation.js';
@@ -66,6 +69,7 @@ async function readSnapshot(accountId: string) {
     goals,
     goalContributions,
     savedFilters,
+    templates,
   ] = await Promise.all([
     pool.query('select * from preferences where account_id = $1 limit 1', [accountId]),
     pool.query('select * from contacts where account_id = $1 order by name asc', [accountId]),
@@ -85,6 +89,7 @@ async function readSnapshot(accountId: string) {
     pool.query('select * from goals where account_id = $1 order by created_at desc', [accountId]),
     pool.query('select * from goal_contributions where account_id = $1 order by date desc, created_at desc', [accountId]),
     pool.query('select * from saved_filters where account_id = $1 order by created_at asc', [accountId]),
+    pool.query('select * from transaction_templates where account_id = $1 order by last_used_at desc nulls last, created_at desc', [accountId]),
   ]);
 
   const pref = preferences.rows[0];
@@ -289,6 +294,17 @@ async function readSnapshot(accountId: string) {
       name: row.name,
       scope: row.scope,
       query: row.query || {},
+      createdAt: isoDateTime(row.created_at),
+      updatedAt: isoDateTime(row.updated_at),
+    })),
+    templates: templates.rows.map((row) => ({
+      id: row.id,
+      accountId: row.account_id,
+      name: row.name,
+      kind: row.kind,
+      data: row.data || {},
+      usesCount: Number(row.uses_count ?? 0),
+      lastUsedAt: row.last_used_at ? isoDateTime(row.last_used_at) : undefined,
       createdAt: isoDateTime(row.created_at),
       updatedAt: isoDateTime(row.updated_at),
     })),
@@ -966,6 +982,97 @@ export default async function handler(request: VercelRequest, response: VercelRe
       );
       await activity(account.id, 'settings', account.id, `Removed tag ${tag}`, 'Tag deleted from all expenses.');
       return ok(response);
+    }
+
+    if (action === 'addTemplate' || action === 'updateTemplate') {
+      const input = templateSchema.parse(action === 'addTemplate' ? payload : payload.input);
+      const id = action === 'addTemplate' ? makeId('template') : payload.id;
+      if (action === 'addTemplate') {
+        await pool.query(
+          `insert into transaction_templates (id, account_id, name, kind, data, created_at, updated_at)
+           values ($1,$2,$3,$4,$5,now(),now())`,
+          [id, account.id, input.name, input.kind, JSON.stringify(input.data)],
+        );
+      } else {
+        await pool.query(
+          `update transaction_templates set name=$1, kind=$2, data=$3, updated_at=now() where id=$4 and account_id=$5`,
+          [input.name, input.kind, JSON.stringify(input.data), id, account.id],
+        );
+      }
+      return ok(response);
+    }
+
+    if (action === 'deleteTemplate') {
+      await pool.query('delete from transaction_templates where id=$1 and account_id=$2', [payload.id, account.id]);
+      return ok(response);
+    }
+
+    if (action === 'recordTemplateUse') {
+      await pool.query(
+        'update transaction_templates set uses_count = uses_count + 1, last_used_at = now(), updated_at = now() where id=$1 and account_id=$2',
+        [payload.id, account.id],
+      );
+      return ok(response);
+    }
+
+    if (action === 'bulkDeleteExpenses') {
+      const input = bulkDeleteSchema.parse(payload);
+      const result = await pool.query(
+        'delete from expenses where id = ANY($1::text[]) and account_id=$2 returning category, amount',
+        [input.ids, account.id],
+      );
+      await activity(
+        account.id,
+        'expense',
+        'bulk',
+        `Deleted ${result.rowCount} expenses`,
+        'Bulk delete from Records.',
+      );
+      return ok(response, { deleted: result.rowCount });
+    }
+
+    if (action === 'bulkUpdateExpenses') {
+      const input = bulkExpenseUpdateSchema.parse(payload);
+      const fragments: string[] = [];
+      const params: unknown[] = [];
+      if (input.patch.category) {
+        params.push(input.patch.category);
+        fragments.push(`category = $${params.length}`);
+      }
+      if (input.patch.paymentMethod) {
+        params.push(input.patch.paymentMethod);
+        fragments.push(`payment_method = $${params.length}`);
+      }
+      if (input.patch.addTag) {
+        params.push(input.patch.addTag);
+        fragments.push(`tags = (select jsonb_agg(distinct v) from (select jsonb_array_elements_text(tags) as v union select $${params.length}::text) t)`);
+      }
+      if (input.patch.removeTag) {
+        params.push(input.patch.removeTag);
+        fragments.push(`tags = coalesce((select jsonb_agg(v) from jsonb_array_elements_text(tags) as v where v <> $${params.length}::text), '[]'::jsonb)`);
+      }
+      if (!fragments.length) return fail(response, 400, 'No patch fields provided.');
+      params.push(input.ids);
+      params.push(account.id);
+      const idsParam = `$${params.length - 1}::text[]`;
+      const accountParam = `$${params.length}`;
+      const result = await pool.query(
+        `update expenses set ${fragments.join(', ')}, updated_at = now() where id = ANY(${idsParam}) and account_id = ${accountParam} returning id`,
+        params,
+      );
+      const summary: string[] = [];
+      if (input.patch.category) summary.push(`category → ${input.patch.category}`);
+      if (input.patch.paymentMethod) summary.push(`method → ${input.patch.paymentMethod}`);
+      if (input.patch.addTag) summary.push(`+#${input.patch.addTag}`);
+      if (input.patch.removeTag) summary.push(`−#${input.patch.removeTag}`);
+      await activity(
+        account.id,
+        'expense',
+        'bulk',
+        `Bulk updated ${result.rowCount} expenses`,
+        summary.join(' · ') || 'Bulk update.',
+      );
+      return ok(response, { updated: result.rowCount });
     }
 
     return fail(response, 404, `Unknown app action: ${action}`);

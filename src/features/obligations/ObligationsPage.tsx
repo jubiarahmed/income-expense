@@ -184,7 +184,10 @@ function LoansPanel() {
             );
           })
         ) : (
-          <EmptyState title="No loans here" body="Add money lent or borrowed, then track partial repayments." />
+          <EmptyState
+            title="No loans here"
+            body="Track money you lent or borrowed with people. Set a due date, log partial repayments, and the dashboard will surface reminders before things slip."
+          />
         )}
       </div>
       <BottomSheet open={Boolean(editing)} title="Edit Loan" onClose={() => setEditing(undefined)}>
@@ -272,7 +275,10 @@ function ItemsPanel() {
             );
           })
         ) : (
-          <EmptyState title="No item records" body="Track chargers, books, devices, tools, and documents." />
+          <EmptyState
+            title="No item records yet"
+            body="Lent your charger? Borrowed a book? Track it here. Each item has a due date and a return button so nothing gets forgotten."
+          />
         )}
       </div>
       <BottomSheet open={Boolean(editing)} title="Edit Item" onClose={() => setEditing(undefined)}>

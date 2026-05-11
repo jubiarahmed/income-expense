@@ -94,6 +94,18 @@ create table if not exists saved_filters (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists transaction_templates (
+  id text primary key,
+  account_id text not null references accounts(id) on delete cascade,
+  name text not null,
+  kind text not null check (kind in ('expense','income','transfer')),
+  data jsonb not null default '{}'::jsonb,
+  uses_count integer not null default 0,
+  last_used_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists incomes (
   id text primary key,
   account_id text not null references accounts(id) on delete cascade,
@@ -287,6 +299,7 @@ create index if not exists wallets_account_idx on wallets(account_id);
 create index if not exists goals_account_idx on goals(account_id);
 create index if not exists goal_contributions_account_idx on goal_contributions(account_id, date desc);
 create index if not exists saved_filters_account_idx on saved_filters(account_id);
+create index if not exists transaction_templates_account_idx on transaction_templates(account_id, last_used_at desc nulls last);
 `;
 
 await pool.query(sql);

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { format, parseISO, subDays } from 'date-fns';
-import { ArrowLeftRight, ArrowUpRight, Copy, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckSquare, Copy, Download, Pencil, Plus, Search, Square, Tag, Trash2, Users, X } from 'lucide-react';
 import { Badge } from '../../components/ui/Badge';
 import { BottomSheet } from '../../components/ui/BottomSheet';
 import { Button } from '../../components/ui/Button';
@@ -463,6 +463,8 @@ function UnifiedSearchResults({
 
 function DailyExpensesPanel() {
   const { expenses, preferences, deleteExpense, addExpense, duplicateExpense } = useFinanceStore();
+  const bulkDeleteExpenses = useFinanceStore((state) => state.bulkDeleteExpenses);
+  const bulkUpdateExpenses = useFinanceStore((state) => state.bulkUpdateExpenses);
   const pushToast = useToastStore((state) => state.push);
   const openAddFlow = useUiStore((state) => state.openAddFlow);
   const [editing, setEditing] = useState<Expense | undefined>();
@@ -470,7 +472,62 @@ function DailyExpensesPanel() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'none' | 'category' | 'method' | 'tag'>('none');
+  const [bulkValue, setBulkValue] = useState('');
   const totals = getExpenseTotals(expenses);
+
+  function toggleRow(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelected(new Set());
+    setBulkAction('none');
+    setBulkValue('');
+  }
+  async function applyBulkDelete() {
+    if (!selected.size) return;
+    try {
+      await bulkDeleteExpenses({ ids: [...selected] });
+      pushToast(`Deleted ${selected.size} expense${selected.size === 1 ? '' : 's'}.`, { tone: 'success' });
+      exitSelectMode();
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Bulk delete failed.', { tone: 'danger' });
+    }
+  }
+  async function applyBulkPatch() {
+    if (!selected.size || !bulkValue.trim()) return;
+    const patch: Record<string, string> = {};
+    if (bulkAction === 'category') patch.category = bulkValue.trim();
+    else if (bulkAction === 'method') patch.paymentMethod = bulkValue.trim();
+    else if (bulkAction === 'tag') patch.addTag = bulkValue.trim();
+    try {
+      await bulkUpdateExpenses({ ids: [...selected], patch });
+      pushToast(`Updated ${selected.size} expense${selected.size === 1 ? '' : 's'}.`, { tone: 'success' });
+      exitSelectMode();
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : 'Bulk update failed.', { tone: 'danger' });
+    }
+  }
+  function exportSelected() {
+    if (!selected.size) return;
+    const rows = expenses.filter((expense) => selected.has(expense.id));
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `expenses-export-${new Date().toISOString().slice(0, 10)}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    pushToast(`Exported ${rows.length} expense${rows.length === 1 ? '' : 's'}.`, { tone: 'success' });
+  }
 
   const filtered = useMemo(
     () =>
@@ -580,13 +637,121 @@ function DailyExpensesPanel() {
       <SectionHeader
         title="Expenses"
         action={
-          <Button variant="danger" className="min-h-9 px-3" icon={<Plus size={16} />} onClick={() => openAddFlow('expense')}>
-            Add
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={selectMode ? 'primary' : 'secondary'}
+              className="min-h-9 px-3"
+              icon={selectMode ? <X size={16} /> : <CheckSquare size={16} />}
+              onClick={() => {
+                if (selectMode) exitSelectMode();
+                else setSelectMode(true);
+              }}
+            >
+              {selectMode ? 'Cancel' : 'Select'}
+            </Button>
+            {!selectMode ? (
+              <Button variant="danger" className="min-h-9 px-3" icon={<Plus size={16} />} onClick={() => openAddFlow('expense')}>
+                Add
+              </Button>
+            ) : null}
+          </div>
         }
       />
 
-      <p className="-mt-2 px-1 text-xs text-zinc-500">Swipe a row left to delete · undo is available.</p>
+      {selectMode ? (
+        <Card className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold tracking-tight text-zinc-700 dark:text-zinc-200">
+              {selected.size} selected
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                className="min-h-9 px-3"
+                onClick={() => setSelected(new Set(filtered.map((expense) => expense.id)))}
+              >
+                Select all
+              </Button>
+              <Button variant="ghost" className="min-h-9 px-3" onClick={() => setSelected(new Set())}>
+                Clear
+              </Button>
+            </div>
+          </div>
+          {selected.size ? (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={bulkAction === 'category' ? 'primary' : 'secondary'}
+                  className="min-h-9 px-2 text-xs"
+                  onClick={() => { setBulkAction(bulkAction === 'category' ? 'none' : 'category'); setBulkValue(''); }}
+                >
+                  Change category
+                </Button>
+                <Button
+                  variant={bulkAction === 'method' ? 'primary' : 'secondary'}
+                  className="min-h-9 px-2 text-xs"
+                  onClick={() => { setBulkAction(bulkAction === 'method' ? 'none' : 'method'); setBulkValue(''); }}
+                >
+                  Change method
+                </Button>
+                <Button
+                  variant={bulkAction === 'tag' ? 'primary' : 'secondary'}
+                  className="min-h-9 px-2 text-xs"
+                  icon={<Tag size={14} />}
+                  onClick={() => { setBulkAction(bulkAction === 'tag' ? 'none' : 'tag'); setBulkValue(''); }}
+                >
+                  Add tag
+                </Button>
+                <Button variant="secondary" className="min-h-9 px-2 text-xs" icon={<Download size={14} />} onClick={exportSelected}>
+                  Export JSON
+                </Button>
+              </div>
+
+              {bulkAction === 'category' ? (
+                <Field label="New category">
+                  <SelectInput value={bulkValue} onChange={(event) => setBulkValue(event.target.value)}>
+                    <option value="">Choose…</option>
+                    {EXPENSE_CATEGORIES.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+              ) : null}
+              {bulkAction === 'method' ? (
+                <Field label="New payment method">
+                  <SelectInput value={bulkValue} onChange={(event) => setBulkValue(event.target.value)}>
+                    <option value="">Choose…</option>
+                    {['Cash', 'bKash', 'Nagad', 'Card', 'Bank', 'Other'].map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+              ) : null}
+              {bulkAction === 'tag' ? (
+                <Field label="Tag to add">
+                  <TextInput value={bulkValue} onChange={(event) => setBulkValue(event.target.value)} placeholder="work, treat..." maxLength={40} />
+                </Field>
+              ) : null}
+              {bulkAction !== 'none' && bulkValue.trim() ? (
+                <Button className="w-full" onClick={() => void applyBulkPatch()}>
+                  Apply to {selected.size} expense{selected.size === 1 ? '' : 's'}
+                </Button>
+              ) : null}
+              <Button variant="danger" className="w-full" icon={<Trash2 size={16} />} onClick={() => void applyBulkDelete()}>
+                Delete {selected.size} expense{selected.size === 1 ? '' : 's'}
+              </Button>
+            </>
+          ) : (
+            <p className="text-xs text-zinc-500">Tap rows below to select them.</p>
+          )}
+        </Card>
+      ) : (
+        <p className="-mt-2 px-1 text-xs text-zinc-500">Swipe a row left to delete · undo is available. Tap Select for bulk actions.</p>
+      )}
 
       <div className="space-y-4">
         {grouped.length ? (
@@ -596,6 +761,48 @@ function DailyExpensesPanel() {
               {groupExpenses.map((expense) => {
                 const style = getExpenseCategoryStyle(expense.category);
                 const Icon = style.icon;
+                const isSelected = selected.has(expense.id);
+                if (selectMode) {
+                  return (
+                    <button
+                      key={expense.id}
+                      type="button"
+                      onClick={() => toggleRow(expense.id)}
+                      className="w-full text-left"
+                    >
+                      <Card
+                        className={clsx(
+                          'p-3 transition',
+                          isSelected
+                            ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200 dark:border-indigo-700 dark:bg-indigo-950/40 dark:ring-indigo-900'
+                            : '',
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          {isSelected ? (
+                            <CheckSquare size={20} className="shrink-0 text-indigo-600 dark:text-indigo-300" />
+                          ) : (
+                            <Square size={20} className="shrink-0 text-zinc-400" />
+                          )}
+                          <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${style.bg} ${style.fg}`}>
+                            <Icon size={18} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+                              {expense.merchant || expense.note || expense.category}
+                            </p>
+                            <p className="mt-0.5 text-xs text-zinc-500">
+                              {expense.category} · {expense.paymentMethod} · {formatFullDate(expense.date)}
+                            </p>
+                          </div>
+                          <p className="shrink-0 font-black tabular-nums text-rose-600 dark:text-rose-400">
+                            −{formatMoney(expense.amount, preferences.currency)}
+                          </p>
+                        </div>
+                      </Card>
+                    </button>
+                  );
+                }
                 return (
                   <SwipeRow key={expense.id} onDelete={() => void handleDelete(expense)}>
                     <Card className="p-3">
@@ -619,10 +826,15 @@ function DailyExpensesPanel() {
                           </span>
                         )}
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-bold tracking-tight text-zinc-950 dark:text-zinc-50">{expense.note || expense.category}</p>
+                          <p className="truncate font-bold tracking-tight text-zinc-950 dark:text-zinc-50">{expense.merchant || expense.note || expense.category}</p>
                           <p className="mt-0.5 text-xs text-zinc-500">
                             {expense.category} · {expense.paymentMethod} · {formatFullDate(expense.date)}
                           </p>
+                          {expense.tags.length ? (
+                            <p className="mt-0.5 truncate text-[0.65rem] font-semibold text-indigo-600 dark:text-indigo-400">
+                              {expense.tags.map((tag) => `#${tag}`).join(' ')}
+                            </p>
+                          ) : null}
                         </div>
                         <p className="shrink-0 font-black tabular-nums text-rose-600 dark:text-rose-400">
                           −{formatMoney(expense.amount, preferences.currency)}
@@ -646,7 +858,16 @@ function DailyExpensesPanel() {
             </div>
           ))
         ) : (
-          <EmptyState title="No expenses found" body="Add daily expenses or loosen the current filters." />
+          <EmptyState
+            title="No expenses yet"
+            body="Track every spend: food, rides, bills, recharges, shopping. Tap +Expense or try Quick add — '120 lunch cash' works."
+            icon={<ArrowDownRight size={22} />}
+            action={
+              <Button variant="danger" icon={<Plus size={16} />} onClick={() => openAddFlow('expense')}>
+                Log first expense
+              </Button>
+            }
+          />
         )}
       </div>
 
@@ -831,9 +1052,14 @@ function IncomePanel() {
           ))
         ) : (
           <EmptyState
-            title="No income recorded"
-            body="Tap +Income to log salary, freelance work, refunds, gifts, or any incoming money."
-            icon={<ArrowUpRight size={28} />}
+            title="No income yet"
+            body="Salary, freelance gigs, bonuses, refunds, gifts — anything that adds money. Log it once and the running balance will reflect it everywhere."
+            icon={<ArrowUpRight size={22} />}
+            action={
+              <Button variant="income" icon={<Plus size={16} />} onClick={() => openAddFlow('income')}>
+                Log first income
+              </Button>
+            }
           />
         )}
       </div>
@@ -968,8 +1194,13 @@ function TransferPanel() {
         ) : (
           <EmptyState
             title="No transfers yet"
-            body="Record movements between Cash, bKash, Nagad, Card, and Bank to keep balances accurate."
-            icon={<ArrowLeftRight size={28} />}
+            body="Moved money from your bank to bKash? Or out as cash? Log it as a transfer so wallet balances stay accurate without inflating income/expense."
+            icon={<ArrowLeftRight size={22} />}
+            action={
+              <Button variant="transfer" icon={<Plus size={16} />} onClick={() => openAddFlow('transfer')}>
+                Record first transfer
+              </Button>
+            }
           />
         )}
       </div>
@@ -1113,7 +1344,16 @@ function SharedExpensesPanel() {
             );
           })
         ) : (
-          <EmptyState title="No shared groups" body="Create groups for lunch, rent, trips, or team snacks." />
+          <EmptyState
+            title="No shared groups"
+            body="Create groups for roommates, trips, team lunches, or any setup where you split bills. Each group tracks who owes whom in real time."
+            icon={<Users size={22} />}
+            action={
+              <Button variant="secondary" icon={<Plus size={16} />} onClick={() => openAddFlow('sharedGroup')}>
+                Create first group
+              </Button>
+            }
+          />
         )}
       </div>
 
