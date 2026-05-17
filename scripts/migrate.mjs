@@ -303,6 +303,42 @@ create index if not exists goals_account_idx on goals(account_id);
 create index if not exists goal_contributions_account_idx on goal_contributions(account_id, date desc);
 create index if not exists saved_filters_account_idx on saved_filters(account_id);
 create index if not exists transaction_templates_account_idx on transaction_templates(account_id, last_used_at desc nulls last);
+
+-- Row Level Security
+-- The backend connects via the project-owner role which has BYPASSRLS, so this
+-- does NOT affect our API. But Supabase exposes every public-schema table via
+-- PostgREST under the anon/authenticated roles. Enabling RLS without any
+-- policies makes those roles unable to read or write anything — which is what
+-- we want, since clients only ever go through our /api/* serverless functions.
+-- The statement is idempotent: re-running on an already-enabled table is a no-op.
+alter table accounts enable row level security;
+alter table sessions enable row level security;
+alter table platform_settings enable row level security;
+alter table preferences enable row level security;
+alter table contacts enable row level security;
+alter table expenses enable row level security;
+alter table incomes enable row level security;
+alter table transfers enable row level security;
+alter table shared_groups enable row level security;
+alter table shared_expenses enable row level security;
+alter table loans enable row level security;
+alter table loan_payments enable row level security;
+alter table item_records enable row level security;
+alter table subscriptions enable row level security;
+alter table reminders enable row level security;
+alter table activity_logs enable row level security;
+alter table budgets enable row level security;
+alter table wallets enable row level security;
+alter table goals enable row level security;
+alter table goal_contributions enable row level security;
+alter table saved_filters enable row level security;
+alter table transaction_templates enable row level security;
+
+-- Belt-and-suspenders: remove all privileges from the PostgREST roles too, so
+-- even if a future policy is accidentally added, the surface stays closed.
+revoke all on all tables in schema public from anon, authenticated;
+revoke all on all sequences in schema public from anon, authenticated;
+revoke all on all functions in schema public from anon, authenticated;
 `;
 
 await pool.query(sql);
