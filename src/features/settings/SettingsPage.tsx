@@ -7,7 +7,7 @@ import { Card, SectionHeader } from '../../components/ui/Card';
 import { Field, SelectInput } from '../../components/ui/Form';
 import type { NotificationPrefs } from '../../domain/models';
 import { clsx } from 'clsx';
-import { APP_VERSION, CURRENCIES } from '../../domain/constants';
+import { APP_VERSION, CURRENCY_DETAILS, REMINDER_DAYS_OPTIONS } from '../../domain/constants';
 import type { CurrencyCode, ThemeMode } from '../../domain/models';
 import { useAuthStore } from '../../state/useAuthStore';
 import { useFinanceStore } from '../../state/useFinanceStore';
@@ -23,6 +23,7 @@ export function SettingsPage() {
   const signOut = useAuthStore((state) => state.signOut);
   const navigate = useNavigate();
   const [currency, setCurrency] = useState<CurrencyCode>(preferences.currency);
+  const [reminderDays, setReminderDays] = useState<number>(preferences.reminderDaysBefore || 2);
   const [theme, setTheme] = useState<ThemeMode>(preferences.theme);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -57,7 +58,7 @@ export function SettingsPage() {
     try {
       await updatePreferences({
         currency,
-        reminderDaysBefore: preferences.reminderDaysBefore || 2,
+        reminderDaysBefore: reminderDays,
         theme,
         notificationsEnabled: preferences.notificationsEnabled,
         notificationPrefs: notifyPrefs,
@@ -77,7 +78,7 @@ export function SettingsPage() {
     try {
       await updatePreferences({
         currency: account?.role === 'superadmin' ? preferences.currency : currency,
-        reminderDaysBefore: preferences.reminderDaysBefore || 2,
+        reminderDaysBefore: account?.role === 'superadmin' ? preferences.reminderDaysBefore || 2 : reminderDays,
         notificationsEnabled: preferences.notificationsEnabled,
         theme: nextTheme,
         notificationPrefs: notifyPrefs,
@@ -175,9 +176,21 @@ export function SettingsPage() {
           <SectionHeader title="Preferences" />
           <Field label="Currency">
             <SelectInput value={currency} onChange={(event) => setCurrency(event.target.value as CurrencyCode)}>
-              {CURRENCIES.map((item) => (
-                <option key={item} value={item}>
-                  {item}
+              {CURRENCY_DETAILS.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.symbol} {item.code} — {item.name}
+                </option>
+              ))}
+            </SelectInput>
+          </Field>
+          <Field label="Remind me this many days before due">
+            <SelectInput
+              value={String(reminderDays)}
+              onChange={(event) => setReminderDays(Number(event.target.value))}
+            >
+              {REMINDER_DAYS_OPTIONS.map((days) => (
+                <option key={days} value={days}>
+                  {days === 0 ? 'On due date only' : `${days} day${days === 1 ? '' : 's'} before`}
                 </option>
               ))}
             </SelectInput>

@@ -7,7 +7,7 @@ import { Card, SectionHeader } from '../../components/ui/Card';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PullToRefresh } from '../../components/ui/PullToRefresh';
 import { getExpenseCategoryStyle } from '../../domain/categoryIcons';
-import type { ExpenseCategory } from '../../domain/models';
+import type { CurrencyCode, ExpenseCategory } from '../../domain/models';
 import { formatFullDate } from '../../lib/date';
 import { formatMoney } from '../../lib/money';
 import {
@@ -174,7 +174,7 @@ export function RemindersPage() {
   );
 }
 
-function ReminderRow({ reminder, currency }: { reminder: UpcomingReminder; currency: 'BDT' | 'USD' | 'EUR' | 'INR' | 'GBP' }) {
+function ReminderRow({ reminder, currency }: { reminder: UpcomingReminder; currency: CurrencyCode }) {
   const navigate = useNavigate();
   const tone = reminder.urgency === 'overdue'
     ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-200'

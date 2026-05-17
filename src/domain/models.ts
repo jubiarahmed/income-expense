@@ -2,7 +2,10 @@ export type ID = string;
 
 export const CURRENT_USER_ID = 'me';
 
-export type CurrencyCode = 'BDT' | 'USD' | 'EUR' | 'INR' | 'GBP';
+// ISO 4217 currency code. The full list lives in `constants.ts` (CURRENCY_DETAILS)
+// and is validated at the zod boundary — keep this widened to `string` so adding
+// a new entry to that array doesn't ripple through every consumer.
+export type CurrencyCode = string;
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type AccountRole = 'user' | 'superadmin';
 export type AccountStatus = 'active' | 'held';

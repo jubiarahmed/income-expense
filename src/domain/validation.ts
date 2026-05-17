@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PAYMENT_METHODS, SUBSCRIPTION_CYCLES } from './constants.js';
+import { CURRENCIES, PAYMENT_METHODS, SUBSCRIPTION_CYCLES } from './constants.js';
 
 const idSchema = z.string().min(1);
 const moneySchema = z.coerce.number().positive('Enter an amount greater than 0');
@@ -118,7 +118,7 @@ export const notificationPrefsSchema = z.object({
 });
 
 export const preferencesSchema = z.object({
-  currency: z.enum(['BDT', 'USD', 'EUR', 'INR', 'GBP']),
+  currency: z.string().refine((v) => CURRENCIES.includes(v), 'Unknown currency code'),
   reminderDaysBefore: z.coerce.number().int().min(0).max(30),
   notificationsEnabled: z.boolean(),
   theme: z.enum(['light', 'dark', 'system']),

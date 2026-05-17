@@ -8,7 +8,7 @@ import { Card, SectionHeader } from '../../components/ui/Card';
 import { Field, SelectInput, TextInput } from '../../components/ui/Form';
 import { PullToRefresh } from '../../components/ui/PullToRefresh';
 import { PAYMENT_METHODS } from '../../domain/constants';
-import type { PaymentMethod, Wallet as WalletType } from '../../domain/models';
+import type { CurrencyCode, PaymentMethod, Wallet as WalletType } from '../../domain/models';
 import { formatMoney } from '../../lib/money';
 import { getTotalLiquidBalance, getWalletBalances, type WalletBalance } from '../../lib/moneyAnalytics';
 import { useFinanceStore } from '../../state/useFinanceStore';
@@ -150,7 +150,7 @@ export function WalletsPage() {
   );
 }
 
-function BalanceBreakdown({ entry, currency }: { entry: WalletBalance; currency: 'BDT' | 'USD' | 'EUR' | 'INR' | 'GBP' }) {
+function BalanceBreakdown({ entry, currency }: { entry: WalletBalance; currency: CurrencyCode }) {
   const rows: { label: string; value: number; tone?: string }[] = [
     { label: 'Opening', value: entry.openingBalance },
     { label: 'Income', value: entry.income, tone: 'text-emerald-600 dark:text-emerald-400' },
