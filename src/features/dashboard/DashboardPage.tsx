@@ -310,18 +310,20 @@ export function DashboardPage() {
             }`}
           />
           {categories.length ? (
-            <Card className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categories} dataKey="value" nameKey="name" innerRadius={50} outerRadius={86} paddingAngle={3}>
-                    {categories.map((entry, index) => (
-                      <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => formatMoney(Number(value), preferences.currency)} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-[-8px] grid grid-cols-2 gap-2">
+            <Card>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={categories} dataKey="value" nameKey="name" innerRadius={50} outerRadius={86} paddingAngle={3}>
+                      {categories.map((entry, index) => (
+                        <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => formatMoney(Number(value), preferences.currency)} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 {categories.slice(0, 4).map((item) => {
                   const style = getExpenseCategoryStyle(item.name as ExpenseCategory);
                   const Icon = style.icon;
